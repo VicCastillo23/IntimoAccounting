@@ -94,6 +94,24 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  max-height: calc(100vh - 12rem);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+  margin-right: -0.25rem;
+}
+
+.sidebar__section-title {
+  margin: 0.85rem 0 0.35rem;
+  padding: 0 0.75rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.sidebar__section-title:first-of-type {
+  margin-top: 0;
 }
 
 .sidebar__link {
@@ -219,6 +237,18 @@ body {
   color: var(--intimo-gray-muted);
   line-height: 1.45;
   text-align: center;
+}
+
+.placeholder-panel {
+  min-height: 12rem;
+}
+
+.placeholder-tbd {
+  margin: 1.5rem 0 0;
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--intimo-gray-muted);
+  letter-spacing: 0.02em;
 }
 
 .main {
@@ -681,6 +711,12 @@ body {
     width: 100%;
     margin-top: 0;
     padding-top: 0;
+  }
+
+  .sidebar__nav {
+    max-height: none;
+    overflow-y: visible;
+    width: 100%;
   }
 
   .form-grid {

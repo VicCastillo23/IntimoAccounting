@@ -107,6 +107,13 @@ function sendAppIfAuthed(req, res) {
 
 app.get("/index.html", sendAppIfAuthed);
 
+app.get("/placeholder.html", (req, res) => {
+  if (!req.session?.userId) {
+    return res.redirect("/login.html");
+  }
+  res.sendFile(path.join(publicDir, "placeholder.html"));
+});
+
 app.use(
   express.static(publicDir, {
     index: false,
