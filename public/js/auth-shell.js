@@ -1,3 +1,5 @@
+import { initMobileNav } from "./mobile-nav.js";
+
 /** Sesión + logout reutilizable en páginas con el mismo shell lateral. */
 export async function initAuthShell() {
   const r = await fetch("/api/auth/me", { credentials: "include" });
@@ -16,5 +18,6 @@ export async function initAuthShell() {
     }
     window.location.href = "/login.html";
   });
+  initMobileNav();
   return true;
 }

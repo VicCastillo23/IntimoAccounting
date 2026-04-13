@@ -63,6 +63,13 @@ export function getSeqState() {
   return { seq, count: polizas.length };
 }
 
+/** Folio que se asignará al siguiente alta (no incrementa el contador). */
+export function peekNextFolio() {
+  const y = new Date().getFullYear();
+  const n = String(seq).padStart(4, "0");
+  return `P-${y}-${n}`;
+}
+
 export function nextFolio() {
   const y = new Date().getFullYear();
   const n = String(seq++).padStart(4, "0");

@@ -13,7 +13,24 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Navegación">
+    <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true"></div>
+    <header class="app-mobile-bar" id="app-mobile-bar">
+      <button
+        type="button"
+        class="app-mobile-bar__menu"
+        id="btn-sidebar-toggle"
+        aria-expanded="false"
+        aria-controls="app-sidebar"
+        aria-label="Abrir menú de navegación"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+      </button>
+      <div class="app-mobile-bar__brand">
+        <span class="app-mobile-bar__wordmark">Íntimo</span>
+        <span class="app-mobile-bar__sub">Contabilidad</span>
+      </div>
+    </header>
+    <aside class="sidebar" id="app-sidebar" aria-label="Navegación">
       <div class="sidebar__brand">
         <div class="sidebar__wordmark" aria-hidden="true">Íntimo</div>
         <p class="sidebar__app-label">Contabilidad</p>

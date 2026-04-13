@@ -54,6 +54,90 @@ body {
   min-height: 100vh;
 }
 
+/* Ocultos en escritorio; se activan en @media (max-width: 900px) */
+.nav-backdrop,
+.app-mobile-bar {
+  display: none;
+}
+
+.nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+body.nav-drawer-open .nav-backdrop {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.app-mobile-bar {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--intimo-black);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.app-mobile-bar__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.app-mobile-bar__menu:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.app-mobile-bar__menu .material-symbols-outlined {
+  font-size: 1.5rem;
+}
+
+.app-mobile-bar__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.app-mobile-bar__wordmark {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.app-mobile-bar__sub {
+  font-size: 0.625rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
 .sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
@@ -526,7 +610,7 @@ body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 600;
   background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
@@ -557,6 +641,35 @@ body {
 
 .modal__header--poliza {
   align-items: center;
+  gap: 1rem;
+}
+
+.modal__header--poliza .modal__header-actions {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+}
+
+.modal__header-poliza-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.modal-create-folio-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.modal-create-folio-value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--intimo-black);
 }
 
 .modal__header-actions {
@@ -575,8 +688,26 @@ body {
   margin: 0 0 0.5rem !important;
 }
 
-.poliza-meta--modal {
-  margin-bottom: 1rem;
+.field__input--concept {
+  display: block;
+  min-height: 2.75rem;
+  max-height: 4.5rem;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.45;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.modal__body--poliza .poliza-meta.poliza-meta--modal {
+  width: 100%;
+}
+
+.modal__body--poliza .poliza-meta__field--concept-wide {
+  width: 100%;
+  min-width: 0;
+  grid-column: 1 / -1;
 }
 
 .poliza-lines-wrap--modal {
@@ -586,11 +717,43 @@ body {
 
 .poliza-lines-table--modal {
   font-size: 0.8125rem;
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Anchos únicos por columna (thead + tbody alineados) */
+.poliza-lines-table--modal col.poliza-colgroup-ticket {
+  width: 30%;
+}
+.poliza-lines-table--modal col.poliza-colgroup-cuenta {
+  width: 4.75rem;
+}
+.poliza-lines-table--modal col.poliza-colgroup-nombre {
+  width: 18%;
+}
+.poliza-lines-table--modal col.poliza-colgroup-depto {
+  width: 6.75rem;
+}
+.poliza-lines-table--modal col.poliza-colgroup-moneda {
+  width: 3.75rem;
+}
+.poliza-lines-table--modal col.poliza-colgroup-debe {
+  width: 8.75rem;
+}
+.poliza-lines-table--modal col.poliza-colgroup-haber {
+  width: 8.75rem;
+}
+.poliza-lines-table--modal col.poliza-colgroup-factura {
+  width: 3.75rem;
+}
+.poliza-lines-table--modal col.poliza-colgroup-actions {
+  width: 2.5rem;
 }
 
 .poliza-lines-table--modal th,
 .poliza-lines-table--modal td {
-  padding: 0.55rem 0.5rem;
+  padding: 0.55rem 0.45rem;
+  box-sizing: border-box;
 }
 
 .modal--poliza .line-input {
@@ -601,6 +764,212 @@ body {
 .modal--poliza .line-input--select {
   font-size: 0.8125rem;
   min-width: 7rem;
+}
+
+.modal--poliza .line-input--select.line-input--fx-compact {
+  min-width: 2.5rem;
+  max-width: 3.4rem;
+  padding-left: 0.2rem;
+  padding-right: 1.1rem;
+}
+
+.modal--poliza .line-input--select.line-input--depto-compact {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  padding-left: 0.3rem;
+  padding-right: 1.5rem;
+  font-size: 0.75rem;
+}
+
+.poliza-lines-table--modal .poliza-col-depto {
+  vertical-align: top;
+}
+
+.poliza-col-ticket-concept {
+  min-width: 12rem;
+}
+
+.poliza-lines-table--modal .poliza-col-cuenta {
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.poliza-lines-table--modal .poliza-col-cuenta .line-input {
+  width: 100%;
+  min-width: 0;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.poliza-ticket-concept-unified {
+  min-height: 4rem;
+}
+
+.poliza-line-concept-textarea {
+  display: block;
+  width: 100%;
+  min-height: 3.25rem;
+  resize: vertical;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.poliza-lines-table--modal .poliza-col-moneda--tight {
+  padding-right: 0.1rem !important;
+}
+
+.poliza-lines-table--modal .poliza-col-debe--tight {
+  padding-left: 0.1rem !important;
+}
+
+.poliza-lines-table--modal .poliza-col-moneda--tight + .poliza-col-debe--tight {
+  padding-left: 0.1rem !important;
+}
+
+.poliza-lines-table--modal td.poliza-cell-factura {
+  display: table-cell;
+  max-width: none;
+  vertical-align: middle;
+}
+
+.poliza-lines-table--modal .poliza-col-factura-head,
+.poliza-lines-table--modal .poliza-cell-factura--end {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.poliza-lines-table--modal .poliza-col-actions {
+  width: 2.5rem;
+  padding: 0.35rem 0.25rem;
+}
+
+.poliza-factura-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem;
+  margin: 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--intimo-gray-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.poliza-factura-add:hover {
+  color: var(--intimo-black);
+  background: var(--intimo-bg);
+}
+
+.poliza-factura-add .material-symbols-outlined {
+  font-size: 1.15rem;
+}
+
+.poliza-cell-factura--readonly:empty {
+  padding: 0.35rem;
+}
+
+.poliza-amount-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.poliza-amt-prefix {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--intimo-gray-dark);
+}
+
+.modal--poliza .line-input--amt {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.poliza-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  color: #b71c1c;
+  text-decoration: none;
+  padding: 0.2rem;
+  border-radius: var(--radius-sm);
+}
+
+.poliza-pdf-btn:hover {
+  background: rgba(183, 28, 28, 0.08);
+}
+
+.poliza-pdf-btn .material-symbols-outlined {
+  font-size: 1.35rem;
+}
+
+.poliza-pdf-clear {
+  margin-left: 0.15rem;
+  padding: 0.1rem 0.35rem !important;
+  min-width: auto;
+  line-height: 1;
+}
+
+.poliza-ticket-concept-readonly {
+  min-width: 10rem;
+  max-width: none;
+}
+
+.poliza-readonly .poliza-lines-wrap .poliza-lines-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.poliza-readonly .poliza-lines-table .poliza-col-ticket-concept,
+.poliza-readonly .poliza-lines-table td.poliza-ticket-concept-readonly {
+  width: 40%;
+  min-width: 15rem;
+}
+
+.poliza-readonly .poliza-lines-table .poliza-col-cuenta {
+  width: 4.75rem;
+}
+
+.poliza-readonly .poliza-lines-table .poliza-col-nombre {
+  width: 18%;
+  min-width: 9rem;
+}
+
+.poliza-readonly .poliza-lines-table .poliza-col-depto {
+  width: 6.75rem;
+  max-width: 8rem;
+  font-size: 0.8125rem;
+}
+
+.poliza-ticket-tag {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--intimo-gray-dark);
+  margin-bottom: 0.25rem;
+}
+
+.poliza-concept-multiline {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  font-size: 0.8125rem;
+}
+
+.poliza-lines-table--modal .poliza-cell-factura.poliza-cell-factura--end {
+  /* Ancho viene del <colgroup>; evitar display:flex en td (rompe alineación) */
+  text-align: center;
 }
 
 body.modal-poliza-open {
@@ -759,12 +1128,20 @@ body.modal-poliza-open {
   white-space: nowrap;
 }
 
-/* —— Pólizas: maestro / detalle —— */
+/* —— Pólizas: listado arriba + visualizador abajo (ancho completo) —— */
 .polizas-workspace {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.2fr);
-  gap: 1.25rem;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 0;
   align-items: stretch;
+  min-height: 0;
+}
+
+.polizas-viewer-panel {
+  border-top: 1px solid var(--intimo-outline);
+  padding-top: 1.25rem;
+  margin-top: 0.5rem;
 }
 
 .polizas-panel-head {
@@ -785,7 +1162,7 @@ body.modal-poliza-open {
 }
 
 .polizas-list-table-wrap {
-  max-height: min(52vh, 560px);
+  max-height: min(38vh, 480px);
   overflow: auto;
   border: 1px solid var(--intimo-bg);
   border-radius: var(--radius-sm);
@@ -811,7 +1188,7 @@ body.modal-poliza-open {
 }
 
 .poliza-viewer-root {
-  min-height: min(52vh, 480px);
+  min-height: min(52vh, 640px);
 }
 
 .viewer-empty {
@@ -903,6 +1280,17 @@ body.modal-poliza-open {
   align-items: start;
   margin-bottom: 1rem;
   font-size: 0.8125rem;
+}
+
+.poliza-meta.poliza-meta--modal {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.25rem;
+}
+
+.poliza-meta.poliza-meta--modal > div:nth-child(1) .field__input,
+.poliza-meta.poliza-meta--modal > div:nth-child(2) .field__input {
+  max-width: 14rem;
 }
 
 .poliza-meta__field--concept {
@@ -1052,6 +1440,10 @@ body.modal-poliza-open {
 .poliza-cell-factura {
   max-width: 10rem;
   word-break: break-word;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
 }
 
 .line-input--select {
@@ -1071,39 +1463,192 @@ body.modal-poliza-open {
 }
 
 @media (max-width: 1100px) {
-  .polizas-workspace {
-    grid-template-columns: 1fr;
+  .polizas-list-table-wrap {
+    max-height: 36vh;
   }
 
-  .polizas-list-table-wrap {
-    max-height: 40vh;
+  .poliza-viewer-root {
+    min-height: min(48vh, 520px);
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
+  html {
+    overflow-x: hidden;
+  }
+
+  body.nav-drawer-open {
+    overflow: hidden;
+  }
+
   .app-shell {
     flex-direction: column;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .nav-backdrop {
+    display: block;
+  }
+
+  .app-mobile-bar {
+    display: flex;
   }
 
   .sidebar {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(288px, 88vw);
+    max-width: 100%;
+    z-index: 400;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .sidebar__foot {
-    width: 100%;
-    margin-top: 0;
-    padding-top: 0;
+  body.nav-drawer-open .sidebar {
+    transform: translateX(0);
   }
 
-  .sidebar__nav {
-    max-height: none;
-    overflow-y: visible;
+  .main {
+    flex: 1;
+    min-width: 0;
     width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .main--polizas {
+    padding-left: clamp(0.75rem, 3vw, 1.25rem);
+    padding-right: clamp(0.75rem, 3vw, 1.25rem);
+  }
+
+  .polizas-workspace,
+  .poliza-viewer-root {
+    min-width: 0;
+  }
+
+  .toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-row .search-field {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .toolbar-row .btn--primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.25rem;
+    margin: 0 -0.25rem;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+    scrollbar-width: thin;
+  }
+
+  .polizas-list-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .polizas-list-table-wrap .data-table {
+    min-width: 520px;
+  }
+
+  .concept-cell {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.35;
+  }
+
+  .poliza-meta:not(.poliza-meta--modal) {
+    grid-template-columns: 1fr;
+  }
+
+  .poliza-lines-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    max-width: 100%;
+  }
+
+  .poliza-lines-table {
+    min-width: 640px;
+  }
+
+  /*
+   * Visualizador (solo lectura): table-layout:fixed + width:100% aplasta columnas y
+   * solapa Moneda / Debe / Haber y los totales. Forzamos ancho real y scroll interno.
+   */
+  .poliza-readonly .poliza-lines-wrap .poliza-lines-table {
+    table-layout: auto;
+    width: max-content;
+    min-width: 56rem;
+    max-width: none;
+  }
+
+  .poliza-readonly .poliza-lines-table .poliza-col-ticket-concept,
+  .poliza-readonly .poliza-lines-table td.poliza-ticket-concept-readonly {
+    width: auto;
+    min-width: 10rem;
+    max-width: 18rem;
+  }
+
+  .poliza-readonly .poliza-lines-table .poliza-col-nombre {
+    min-width: 6.5rem;
+    max-width: 12rem;
+  }
+
+  .poliza-readonly .poliza-lines-table .poliza-col-moneda,
+  .poliza-readonly .poliza-lines-table th.poliza-col-moneda {
+    white-space: nowrap;
+    min-width: 5.5rem;
+  }
+
+  .poliza-readonly .poliza-lines-table th.num,
+  .poliza-readonly .poliza-lines-table td.num {
+    white-space: nowrap;
+    min-width: 7.25rem;
+  }
+
+  .poliza-readonly .poliza-lines-table .poliza-col-factura-head,
+  .poliza-readonly .poliza-lines-table .poliza-cell-factura {
+    white-space: nowrap;
+    min-width: 4rem;
+  }
+
+  .poliza-lines-table--totals .num {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .poliza-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .poliza-toolbar {
+    gap: 0.5rem;
+  }
+
+  .poliza-toolbar .btn--primary {
+    width: 100%;
+    justify-content: center;
   }
 
   .form-grid {

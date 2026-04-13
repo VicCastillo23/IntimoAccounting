@@ -13,7 +13,24 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Navegación">
+    <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true"></div>
+    <header class="app-mobile-bar" id="app-mobile-bar">
+      <button
+        type="button"
+        class="app-mobile-bar__menu"
+        id="btn-sidebar-toggle"
+        aria-expanded="false"
+        aria-controls="app-sidebar"
+        aria-label="Abrir menú de navegación"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+      </button>
+      <div class="app-mobile-bar__brand">
+        <span class="app-mobile-bar__wordmark">Íntimo</span>
+        <span class="app-mobile-bar__sub">Contabilidad</span>
+      </div>
+    </header>
+    <aside class="sidebar" id="app-sidebar" aria-label="Navegación">
       <div class="sidebar__brand">
         <div class="sidebar__wordmark" aria-hidden="true">Íntimo</div>
         <p class="sidebar__app-label">Contabilidad</p>
@@ -166,7 +183,13 @@
       tabindex="-1"
     >
       <div class="modal__header modal__header--poliza">
-        <h2 class="modal__title" id="modal-create-poliza-title">Nueva póliza</h2>
+        <div class="modal__header-poliza-main">
+          <h2 class="modal__title" id="modal-create-poliza-title">Nueva póliza</h2>
+          <p class="modal-create-folio-line" aria-live="polite">
+            <span class="poliza-meta__label">Folio</span>
+            <span id="create-folio-preview" class="modal-create-folio-value">—</span>
+          </p>
+        </div>
         <div class="modal__header-actions">
           <button type="button" class="poliza-toolbtn" disabled title="Próximamente" aria-hidden="true">
             <span class="material-symbols-outlined">print</span>
@@ -189,26 +212,42 @@
             <span class="poliza-meta__label">Fecha</span>
             <input type="date" class="field__input" id="create-date" readonly />
           </div>
-          <div class="poliza-meta__field--concept">
+          <div class="poliza-meta__field--concept poliza-meta__field--concept-wide">
             <span class="poliza-meta__label">Concepto general</span>
-            <input id="create-concept" class="field__input" type="text" placeholder="Descripción del asiento" />
+            <textarea
+              id="create-concept"
+              class="field__input field__input--concept"
+              rows="2"
+              placeholder="Descripción amplia del asiento (cierre del día, referencias, etc.)"
+            ></textarea>
           </div>
         </div>
         <p class="modal__hint modal__hint--poliza">Un renglón por ticket de venta; líneas de resumen (ventas/IVA) sin ticket. Debe = haber.</p>
         <p class="poliza-mock-hint">Plantilla con tickets del día (demo); edita enlaces de factura y moneda antes de guardar.</p>
         <div class="poliza-lines-wrap poliza-lines-wrap--modal">
           <table class="poliza-lines-table poliza-lines-table--modal">
+            <colgroup>
+              <col class="poliza-colgroup-ticket" />
+              <col class="poliza-colgroup-cuenta" />
+              <col class="poliza-colgroup-nombre" />
+              <col class="poliza-colgroup-depto" />
+              <col class="poliza-colgroup-moneda" />
+              <col class="poliza-colgroup-debe" />
+              <col class="poliza-colgroup-haber" />
+              <col class="poliza-colgroup-factura" />
+              <col class="poliza-colgroup-actions" />
+            </colgroup>
             <thead>
               <tr>
-                <th>Ticket</th>
-                <th>No. cuenta</th>
-                <th>Nombre</th>
-                <th>Factura</th>
-                <th>Concepto mov.</th>
-                <th>Moneda</th>
-                <th class="num">Debe</th>
-                <th class="num">Haber</th>
-                <th></th>
+                <th class="poliza-col-ticket-concept">Ticket / concepto mov.</th>
+                <th class="poliza-col-cuenta">No. cuenta</th>
+                <th class="poliza-col-nombre">Nombre</th>
+                <th class="poliza-col-depto">Depto.</th>
+                <th class="poliza-col-moneda">Moneda</th>
+                <th class="num poliza-col-debehaber">Debe</th>
+                <th class="num poliza-col-debehaber">Haber</th>
+                <th class="poliza-col-factura-head">Factura</th>
+                <th class="poliza-col-actions"></th>
               </tr>
             </thead>
             <tbody id="create-lines-tbody"></tbody>

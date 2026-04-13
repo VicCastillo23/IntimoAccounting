@@ -9,6 +9,7 @@ function line(x) {
     invoiceUrl: "",
     fxCurrency: "MX",
     lineConcept: "",
+    depto: "ADMINISTRACION",
     ...x,
   };
 }
@@ -32,6 +33,7 @@ export const initialPolizas = [
         lineConcept: "Ticket mostrador",
         invoiceUrl: "https://example.com/cfdi/ticket-0142.xml",
         fxCurrency: "MX",
+        depto: "ADMINISTRACION",
       }),
       line({
         ticketId: "T-0410-0143",
@@ -42,6 +44,7 @@ export const initialPolizas = [
         lineConcept: "Ticket mostrador (sin factura)",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "ADMINISTRACION",
       }),
       line({
         ticketId: "T-0410-0144",
@@ -52,6 +55,7 @@ export const initialPolizas = [
         lineConcept: "Ticket — moneda extranjera",
         invoiceUrl: "https://example.com/cfdi/ticket-0144.pdf",
         fxCurrency: "USD",
+        depto: "SERVICIOS_GENERALES",
       }),
       line({
         ticketId: "",
@@ -62,6 +66,7 @@ export const initialPolizas = [
         lineConcept: "Consolidado ventas del día",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "ADMINISTRACION",
       }),
       line({
         ticketId: "",
@@ -72,6 +77,7 @@ export const initialPolizas = [
         lineConcept: "IVA 16 %",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "OTROS",
       }),
     ],
   },
@@ -93,6 +99,7 @@ export const initialPolizas = [
         lineConcept: "Salida inventario insumos",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "SERVICIOS_GENERALES",
       }),
       line({
         ticketId: "",
@@ -103,6 +110,7 @@ export const initialPolizas = [
         lineConcept: "Ajuste inventario",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "SERVICIOS_GENERALES",
       }),
     ],
   },
@@ -124,6 +132,7 @@ export const initialPolizas = [
         lineConcept: "Empaque y consumibles",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "OTROS",
       }),
       line({
         ticketId: "",
@@ -134,6 +143,7 @@ export const initialPolizas = [
         lineConcept: "Transferencia proveedor",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "OTROS",
       }),
     ],
   },

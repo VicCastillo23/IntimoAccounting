@@ -1,3 +1,5 @@
+import { initMobileNav } from "./mobile-nav.js";
+
 const $ = (sel, root = document) => root.querySelector(sel);
 
 function apiFetch(url, opts = {}) {
@@ -31,18 +33,109 @@ function fxLabel(code) {
   return m[code] || m.MX;
 }
 
-/** @param {string} url */
-function invoiceLinkHtml(url) {
-  const u = String(url || "").trim();
-  if (!u) return `<span class="poliza-cell--empty">—</span>`;
-  if (!/^https?:\/\//i.test(u)) return escapeHtml(u);
-  return `<a href="${escapeAttr(u)}" class="poliza-invoice-link" target="_blank" rel="noopener noreferrer">Descargar factura</a>`;
+function deptoLabel(code) {
+  const m = {
+    ADMINISTRACION: "Administración",
+    SERVICIOS_GENERALES: "Servicios generales",
+    OTROS: "Otros",
+  };
+  return m[code] || "—";
 }
 
-function fxSelectOptions(selected) {
-  return FX_OPTIONS.map(
-    (o) => `<option value="${o.value}" ${selected === o.value ? "selected" : ""}>${o.label}</option>`
-  ).join("");
+/** @param {string} url */
+function invoicePdfLinkHtml(url) {
+  const u = String(url || "").trim();
+  if (!u) return "";
+  if (!/^https?:\/\//i.test(u)) return escapeHtml(u);
+  return `<a href="${escapeAttr(u)}" class="poliza-pdf-btn poliza-pdf-btn--readonly" target="_blank" rel="noopener noreferrer" download title="Descargar o abrir factura (PDF/CFDI)"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a>`;
+}
+
+/** Texto único para captura: primera línea tipo T-… se guarda como ticket; el resto como concepto mov. */
+function joinTicketConceptBlock(ticketId, lineConcept) {
+  const t = String(ticketId || "").trim();
+  const c = String(lineConcept || "").trim();
+  if (t && c) return `${t}\n${c}`;
+  if (c) return c;
+  return t;
+}
+
+function parseTicketConceptBlock(text) {
+  const raw = String(text ?? "");
+  const lines = raw.split(/\r?\n/);
+  const first = lines[0]?.trim() ?? "";
+  const rest = lines.slice(1).join("\n").trim();
+  if (/^T-[\w.-]+$/i.test(first)) {
+    return { ticketId: first, lineConcept: rest };
+  }
+  return { ticketId: "", lineConcept: raw.trim() };
+}
+
+function currencyPrefix(fx) {
+  const m = { MX: "$", USD: "US$", CAD: "C$", EUR: "€" };
+  return m[fx] || "$";
+}
+
+/** Formato con separador de miles (es-MX), p. ej. 20,000 o 20,000.50 */
+function formatAmountForInput(n) {
+  if (n === 0 || n === "" || n == null) return "";
+  const num = Number(n);
+  if (isNaN(num) || num === 0) return "";
+  return new Intl.NumberFormat("es-MX", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(num);
+}
+
+/** Valor sin separadores para editar */
+function amountRawString(n) {
+  if (n === 0 || n === "" || n == null) return "";
+  const num = Number(n);
+  if (isNaN(num) || num === 0) return "";
+  return String(num);
+}
+
+function parseAmountInputString(s) {
+  let t = String(s).trim().replace(/\s/g, "");
+  t = t.replace(/,/g, "");
+  t = t.replace(/[^\d.]/g, "");
+  const dot = t.indexOf(".");
+  if (dot !== -1) t = t.slice(0, dot + 1) + t.slice(dot + 1).replace(/\./g, "");
+  if (t === "" || t === ".") return 0;
+  const n = parseFloat(t);
+  return isNaN(n) ? 0 : n;
+}
+
+function fxSelectOptionsCompact(selected) {
+  const fx = ["MX", "USD", "CAD", "EUR"].includes(selected) ? selected : "MX";
+  return ["MX", "USD", "CAD", "EUR"]
+    .map((v) => `<option value="${v}" ${v === fx ? "selected" : ""}>${v}</option>`)
+    .join("");
+}
+
+function deptoSelectOptions(selected) {
+  const d = ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"].includes(selected) ? selected : "ADMINISTRACION";
+  const opts = [
+    ["ADMINISTRACION", "Administración"],
+    ["SERVICIOS_GENERALES", "Servicios generales"],
+    ["OTROS", "Otros"],
+  ];
+  return opts.map(([v, label]) => `<option value="${v}" ${v === d ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function facturaCellEdit(line, i) {
+  const u = String(line.invoiceUrl || "").trim();
+  if (u && /^https?:\/\//i.test(u)) {
+    return `<a href="${escapeAttr(u)}" class="poliza-pdf-btn" target="_blank" rel="noopener noreferrer" download title="Descargar o abrir factura"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a><button type="button" class="btn btn--ghost btn--sm poliza-pdf-clear" data-clear-invoice="${i}" title="Quitar enlace">×</button>`;
+  }
+  if (line._showInvoice || u) {
+    return `<input type="url" class="line-input poliza-invoice-url-input" data-field="invoiceUrl" placeholder="https://…" value="${escapeAttr(u)}" />`;
+  }
+  return `<button type="button" class="poliza-factura-add" data-show-invoice="${i}" title="Añadir enlace de factura"><span class="material-symbols-outlined" aria-hidden="true">add_link</span></button>`;
+}
+
+function formatLineAmountDisplay(n) {
+  if (!n) return "—";
+  return new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
 }
 
 function lineTotals(lines) {
@@ -65,6 +158,8 @@ function folioSeq(folio) {
 function normLine(l) {
   const fx = String(l.fxCurrency || l.currency || "MX").toUpperCase();
   const fxCurrency = ["MX", "USD", "CAD", "EUR"].includes(fx) ? fx : "MX";
+  const d = String(l.depto || "ADMINISTRACION").toUpperCase();
+  const depto = ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"].includes(d) ? d : "ADMINISTRACION";
   return {
     ticketId: String(l.ticketId || "").trim(),
     accountCode: l.accountCode || "",
@@ -74,6 +169,7 @@ function normLine(l) {
     lineConcept: l.lineConcept || "",
     invoiceUrl: String(l.invoiceUrl || "").trim(),
     fxCurrency,
+    depto,
   };
 }
 
@@ -88,6 +184,19 @@ let viewerMode = "empty";
 function isCreateModalOpen() {
   const m = document.getElementById("modal-create-poliza");
   return !!(m && !m.hidden);
+}
+
+async function refreshCreateFolioPreview() {
+  const el = document.getElementById("create-folio-preview");
+  if (!el) return;
+  try {
+    const res = await apiFetch("/api/polizas/next-folio");
+    await ensureAuthed(res);
+    const j = await res.json();
+    el.textContent = j.success && j.folio ? j.folio : "—";
+  } catch {
+    el.textContent = "—";
+  }
 }
 
 function openCreateModal() {
@@ -127,6 +236,7 @@ function getMockNewPolizaTemplate() {
         lineConcept: "Venta ticket mostrador",
         invoiceUrl: "https://example.com/cfdi/ticket-0082.xml",
         fxCurrency: "MX",
+        depto: "ADMINISTRACION",
         debit: 450,
         credit: 0,
       },
@@ -137,6 +247,7 @@ function getMockNewPolizaTemplate() {
         lineConcept: "Venta ticket (pendiente factura)",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "ADMINISTRACION",
         debit: 320,
         credit: 0,
       },
@@ -147,6 +258,7 @@ function getMockNewPolizaTemplate() {
         lineConcept: "Venta ticket",
         invoiceUrl: "https://example.com/cfdi/ticket-0084.pdf",
         fxCurrency: "USD",
+        depto: "SERVICIOS_GENERALES",
         debit: 390,
         credit: 0,
       },
@@ -157,6 +269,7 @@ function getMockNewPolizaTemplate() {
         lineConcept: "Consolidado ventas",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "ADMINISTRACION",
         debit: 0,
         credit: 1000,
       },
@@ -167,6 +280,7 @@ function getMockNewPolizaTemplate() {
         lineConcept: "IVA 16 %",
         invoiceUrl: "",
         fxCurrency: "MX",
+        depto: "OTROS",
         debit: 0,
         credit: 160,
       },
@@ -195,7 +309,7 @@ function matches(p) {
     p.date,
     sourceLabel(p.sourceRef),
     ...(p.lines || []).map((l) =>
-      `${l.ticketId || ""} ${l.accountCode} ${l.accountName} ${l.lineConcept || ""} ${l.invoiceUrl || ""}`.trim()
+      `${l.ticketId || ""} ${l.accountCode} ${l.accountName} ${l.lineConcept || ""} ${l.invoiceUrl || ""} ${deptoLabel(l.depto)}`.trim()
     ),
   ]
     .join(" ")
@@ -267,19 +381,23 @@ function renderViewer() {
   const nPart = lines.length;
 
   const rowsHtml = lines
-    .map(
-      (l) => `
+    .map((l) => {
+      const block = joinTicketConceptBlock(l.ticketId, l.lineConcept);
+      const factura = invoicePdfLinkHtml(l.invoiceUrl);
+      return `
     <tr>
-      <td>${l.ticketId ? escapeHtml(l.ticketId) : "—"}</td>
-      <td>${escapeHtml(l.accountCode)}</td>
-      <td>${escapeHtml(l.accountName)}</td>
-      <td class="poliza-cell-factura">${invoiceLinkHtml(l.invoiceUrl)}</td>
-      <td>${escapeHtml(l.lineConcept || "—")}</td>
-      <td>${escapeHtml(fxLabel(l.fxCurrency))}</td>
-      <td class="num">${l.debit ? formatMoney(l.debit) : "—"}</td>
-      <td class="num">${l.credit ? formatMoney(l.credit) : "—"}</td>
-    </tr>`
-    )
+      <td class="poliza-ticket-concept-readonly poliza-col-ticket-concept">
+        <div class="poliza-concept-multiline">${block ? escapeHtml(block) : "—"}</div>
+      </td>
+      <td class="poliza-col-cuenta">${escapeHtml(l.accountCode)}</td>
+      <td class="poliza-col-nombre">${escapeHtml(l.accountName)}</td>
+      <td class="poliza-col-depto">${escapeHtml(deptoLabel(l.depto))}</td>
+      <td class="poliza-col-moneda">${escapeHtml(fxLabel(l.fxCurrency))}</td>
+      <td class="num">${l.debit ? `${currencyPrefix(l.fxCurrency)} ${formatLineAmountDisplay(l.debit)}` : "—"}</td>
+      <td class="num">${l.credit ? `${currencyPrefix(l.fxCurrency)} ${formatLineAmountDisplay(l.credit)}` : "—"}</td>
+      <td class="poliza-cell-factura poliza-cell-factura--readonly">${factura}</td>
+    </tr>`;
+    })
     .join("");
 
   const syncNote =
@@ -320,22 +438,23 @@ function renderViewer() {
         <table class="poliza-lines-table">
           <thead>
             <tr>
-              <th>Ticket</th>
-              <th>No. cuenta</th>
-              <th>Nombre</th>
-              <th>Factura</th>
-              <th>Concepto mov.</th>
-              <th>Moneda</th>
+              <th class="poliza-col-ticket-concept">Ticket / concepto mov.</th>
+              <th class="poliza-col-cuenta">No. cuenta</th>
+              <th class="poliza-col-nombre">Nombre</th>
+              <th class="poliza-col-depto">Depto.</th>
+              <th class="poliza-col-moneda">Moneda</th>
               <th class="num">Debe</th>
               <th class="num">Haber</th>
+              <th class="poliza-col-factura-head">Factura</th>
             </tr>
           </thead>
           <tbody>
             ${rowsHtml}
             <tr class="poliza-lines-table--totals">
-              <td colspan="6">Totales</td>
+              <td colspan="5">Totales</td>
               <td class="num">${formatMoney(debit)}</td>
               <td class="num">${formatMoney(credit)}</td>
+              <td></td>
             </tr>
           </tbody>
         </table>
@@ -369,26 +488,45 @@ function renderCreateLinesTable() {
     return;
   }
   tbody.innerHTML = createLines
-    .map(
-      (line, i) => `
+    .map((line, i) => {
+      const fx = line.fxCurrency || "MX";
+      const prefix = currencyPrefix(fx);
+      const debitVal = formatAmountForInput(line.debit);
+      const creditVal = formatAmountForInput(line.credit);
+      const ticketConceptVal = joinTicketConceptBlock(line.ticketId, line.lineConcept);
+      return `
     <tr data-idx="${i}">
-      <td><input class="line-input" type="text" data-field="ticketId" placeholder="T-…" value="${escapeAttr(line.ticketId)}" /></td>
-      <td><input class="line-input" type="text" data-field="accountCode" value="${escapeAttr(line.accountCode)}" /></td>
-      <td><input class="line-input" type="text" data-field="accountName" value="${escapeAttr(line.accountName)}" /></td>
-      <td><input class="line-input" type="url" data-field="invoiceUrl" placeholder="https://… CFDI/PDF" value="${escapeAttr(line.invoiceUrl)}" /></td>
-      <td><input class="line-input" type="text" data-field="lineConcept" value="${escapeAttr(line.lineConcept)}" /></td>
-      <td>
-        <select class="line-input line-input--select" data-field="fxCurrency">${fxSelectOptions(line.fxCurrency || "MX")}</select>
+      <td class="poliza-col-ticket-concept">
+        <textarea class="line-input poliza-line-concept-textarea poliza-ticket-concept-unified" data-field="ticketConceptBlock" rows="3" placeholder="Primera línea: T-0411-0082 · Luego el concepto del movimiento">${escapeHtml(ticketConceptVal)}</textarea>
       </td>
-      <td class="num"><input class="line-input line-input--num" type="number" step="0.01" min="0" data-field="debit" value="${line.debit || ""}" /></td>
-      <td class="num"><input class="line-input line-input--num" type="number" step="0.01" min="0" data-field="credit" value="${line.credit || ""}" /></td>
-      <td><button type="button" class="btn btn--ghost btn--sm" data-remove-line="${i}">✕</button></td>
-    </tr>`
-    )
+      <td class="poliza-col-cuenta"><input class="line-input" type="text" data-field="accountCode" value="${escapeAttr(line.accountCode)}" /></td>
+      <td class="poliza-col-nombre"><input class="line-input" type="text" data-field="accountName" value="${escapeAttr(line.accountName)}" /></td>
+      <td class="poliza-col-depto">
+        <select class="line-input line-input--select line-input--depto-compact" data-field="depto">${deptoSelectOptions(line.depto || "ADMINISTRACION")}</select>
+      </td>
+      <td class="poliza-col-moneda poliza-col-moneda--tight">
+        <select class="line-input line-input--select line-input--fx-compact" data-field="fxCurrency">${fxSelectOptionsCompact(line.fxCurrency || "MX")}</select>
+      </td>
+      <td class="num poliza-col-debehaber poliza-col-debe--tight">
+        <div class="poliza-amount-wrap">
+          <span class="poliza-amt-prefix" aria-hidden="true">${prefix}</span>
+          <input class="line-input line-input--amt" type="text" inputmode="decimal" autocomplete="off" data-field="debit" placeholder="0.00" value="${escapeAttr(debitVal)}" />
+        </div>
+      </td>
+      <td class="num poliza-col-debehaber">
+        <div class="poliza-amount-wrap">
+          <span class="poliza-amt-prefix" aria-hidden="true">${prefix}</span>
+          <input class="line-input line-input--amt" type="text" inputmode="decimal" autocomplete="off" data-field="credit" placeholder="0.00" value="${escapeAttr(creditVal)}" />
+        </div>
+      </td>
+      <td class="poliza-cell-factura poliza-cell-factura--end">${facturaCellEdit(line, i)}</td>
+      <td class="poliza-col-actions"><button type="button" class="btn btn--ghost btn--sm" data-remove-line="${i}">✕</button></td>
+    </tr>`;
+    })
     .join("");
 }
 
-function openCreate() {
+async function openCreate() {
   const tpl = getMockNewPolizaTemplate();
   createLines.length = 0;
   tpl.lines.forEach((line) => createLines.push({ ...line }));
@@ -399,6 +537,7 @@ function openCreate() {
   const conc = $("#create-concept");
   if (conc) conc.value = tpl.concept;
   showAlert("");
+  await refreshCreateFolioPreview();
   openCreateModal();
 }
 
@@ -474,6 +613,7 @@ function wireUi() {
       lineConcept: "",
       invoiceUrl: "",
       fxCurrency: "MX",
+      depto: "ADMINISTRACION",
       debit: 0,
       credit: 0,
     });
@@ -484,6 +624,30 @@ function wireUi() {
   const modalRoot = document.getElementById("modal-create-poliza");
   modalRoot?.addEventListener("click", (e) => {
     if (e.target === modalRoot) closeCreateModal();
+    const showInv = e.target.closest("[data-show-invoice]");
+    if (showInv && isCreateModalOpen()) {
+      const i = Number(showInv.getAttribute("data-show-invoice"));
+      if (createLines[i]) {
+        createLines[i]._showInvoice = true;
+        renderCreateLinesTable();
+        requestAnimationFrame(() => {
+          document.querySelector(`tr[data-idx="${i}"] .poliza-invoice-url-input`)?.focus();
+        });
+      }
+      return;
+    }
+    const clr = e.target.closest("[data-clear-invoice]");
+    if (clr && isCreateModalOpen()) {
+      e.preventDefault();
+      const i = Number(clr.getAttribute("data-clear-invoice"));
+      if (createLines[i]) {
+        createLines[i].invoiceUrl = "";
+        createLines[i]._showInvoice = false;
+        renderCreateLinesTable();
+        updateCreateTotalsBar();
+      }
+      return;
+    }
     const rm = e.target.closest("[data-remove-line]");
     if (!rm || !isCreateModalOpen()) return;
     const i = Number(rm.getAttribute("data-remove-line"));
@@ -498,11 +662,19 @@ function wireUi() {
     const idx = Number(row.getAttribute("data-idx"));
     const field = e.target.getAttribute("data-field");
     if (!field || !createLines[idx]) return;
-    const val = e.target.value;
-    if (field === "debit" || field === "credit") {
-      createLines[idx][field] = val === "" ? 0 : Number(val);
+    if (field === "ticketConceptBlock") {
+      const parsed = parseTicketConceptBlock(e.target.value);
+      createLines[idx].ticketId = parsed.ticketId;
+      createLines[idx].lineConcept = parsed.lineConcept;
+    } else if (field === "debit" || field === "credit") {
+      let raw = String(e.target.value).replace(/,/g, "").replace(/[^\d.]/g, "");
+      const dot = raw.indexOf(".");
+      if (dot !== -1) raw = raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, "");
+      e.target.value = raw;
+      const num = raw === "" || raw === "." ? 0 : parseFloat(raw);
+      createLines[idx][field] = isNaN(num) ? 0 : num;
     } else {
-      createLines[idx][field] = val;
+      createLines[idx][field] = e.target.value;
     }
     updateCreateTotalsBar();
   });
@@ -515,8 +687,65 @@ function wireUi() {
     const field = t.getAttribute("data-field");
     if (field === "fxCurrency" && createLines[idx]) {
       createLines[idx].fxCurrency = t.value;
+      const p = currencyPrefix(t.value);
+      row.querySelectorAll(".poliza-amt-prefix").forEach((el) => {
+        el.textContent = p;
+      });
       updateCreateTotalsBar();
     }
+    if (field === "depto" && createLines[idx]) {
+      createLines[idx].depto = t.value;
+      updateCreateTotalsBar();
+    }
+  });
+
+  document.getElementById("modal-create-poliza")?.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (!t.classList?.contains("line-input--amt") || !isCreateModalOpen()) return;
+    const field = t.getAttribute("data-field");
+    if (field !== "debit" && field !== "credit") return;
+    const row = t.closest("tr[data-idx]");
+    if (!row) return;
+    const idx = Number(row.getAttribute("data-idx"));
+    const line = createLines[idx];
+    if (!line) return;
+    t.value = amountRawString(line[field]);
+  });
+
+  document.getElementById("modal-create-poliza")?.addEventListener("focusout", (e) => {
+    const t = e.target;
+    if (!isCreateModalOpen()) return;
+
+    if (t.classList?.contains("line-input--amt")) {
+      const field = t.getAttribute("data-field");
+      if (field === "debit" || field === "credit") {
+        const row = t.closest("tr[data-idx]");
+        if (!row) return;
+        const idx = Number(row.getAttribute("data-idx"));
+        if (!createLines[idx]) return;
+        const num = parseAmountInputString(t.value);
+        createLines[idx][field] = num;
+        t.value = formatAmountForInput(num);
+        updateCreateTotalsBar();
+      }
+      return;
+    }
+
+    if (!t.classList?.contains("poliza-invoice-url-input")) return;
+    const row = t.closest("tr[data-idx]");
+    if (!row) return;
+    const idx = Number(row.getAttribute("data-idx"));
+    if (!createLines[idx]) return;
+    const u = String(t.value || "").trim();
+    createLines[idx].invoiceUrl = u;
+    if (u && /^https?:\/\//i.test(u)) {
+      createLines[idx]._showInvoice = false;
+      renderCreateLinesTable();
+    } else if (!u) {
+      createLines[idx]._showInvoice = false;
+      renderCreateLinesTable();
+    }
+    updateCreateTotalsBar();
   });
 
   document.addEventListener("keydown", (e) => {
@@ -548,6 +777,9 @@ async function savePoliza() {
     fxCurrency: ["MX", "USD", "CAD", "EUR"].includes(String(l.fxCurrency || "MX").toUpperCase())
       ? String(l.fxCurrency).toUpperCase()
       : "MX",
+    depto: ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"].includes(String(l.depto || "ADMINISTRACION").toUpperCase())
+      ? String(l.depto || "ADMINISTRACION").toUpperCase()
+      : "ADMINISTRACION",
   }));
   const validLines = lines.filter(
     (l) => (l.ticketId || l.accountCode) && (l.debit > 0 || l.credit > 0)
@@ -600,6 +832,7 @@ async function boot() {
   const el = document.getElementById("session-user");
   if (el) el.textContent = j.user.username;
   wireUi();
+  initMobileNav();
   try {
     await load();
   } catch (err) {

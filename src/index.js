@@ -14,6 +14,7 @@ import {
   getPolizas,
   addPoliza,
   nextFolio,
+  peekNextFolio,
 } from "./store/polizasStore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -56,8 +57,19 @@ app.post("/api/auth/login", handleLogin);
 app.post("/api/auth/logout", handleLogout);
 app.get("/api/auth/me", handleMe);
 
+const DEPTO_VALUES = ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"];
+
+function normDepto(v) {
+  const u = String(v || "").toUpperCase();
+  return DEPTO_VALUES.includes(u) ? u : "ADMINISTRACION";
+}
+
 app.get("/api/polizas", requireAuth, (_req, res) => {
   res.json({ success: true, data: getPolizas() });
+});
+
+app.get("/api/polizas/next-folio", requireAuth, (_req, res) => {
+  res.json({ success: true, folio: peekNextFolio() });
 });
 
 app.post("/api/polizas", requireAuth, (req, res) => {
@@ -88,6 +100,7 @@ app.post("/api/polizas", requireAuth, (req, res) => {
       lineConcept: String(l.lineConcept || "").trim(),
       invoiceUrl: String(l.invoiceUrl || "").trim(),
       fxCurrency,
+      depto: normDepto(l.depto),
     };
   };
 
