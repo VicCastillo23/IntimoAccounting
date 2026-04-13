@@ -8,6 +8,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "..", "data");
 const POLIZAS_FILE = path.join(DATA_DIR, "polizas.enc");
 
+/** Pólizas demo retiradas: se eliminan al cargar si aún están en disco. */
+const REMOVED_POLIZA_IDS = new Set(["pol-001", "pol-002", "pol-003"]);
+const REMOVED_POLIZA_FOLIOS = new Set(["P-2026-0001", "P-2026-0002", "P-2026-0003"]);
+
 /** @type {Buffer} */
 let _key;
 
@@ -48,6 +52,15 @@ export function initPolizasStore(key32) {
 
   try {
     loadFromDisk();
+    const n0 = polizas.length;
+    polizas = polizas.filter(
+      (p) =>
+        !REMOVED_POLIZA_IDS.has(String(p.id)) &&
+        !REMOVED_POLIZA_FOLIOS.has(String(p.folio))
+    );
+    if (polizas.length !== n0) {
+      persist();
+    }
   } catch (e) {
     throw new Error(
       `No se pudo descifrar ${POLIZAS_FILE}. Verifica DATA_ENCRYPTION_KEY. ${e.message}`

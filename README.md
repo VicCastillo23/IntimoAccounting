@@ -60,6 +60,16 @@ Abre [http://localhost:3010](http://localhost:3010). Sin sesión, se redirige a 
 - `GET /api/polizas`, `POST /api/polizas`
 - `GET /health` — comprobación mínima (sin datos sensibles)
 
+## Vista previa en el servidor (aún no productivo)
+
+Para que en **AWS** se comporte **como en local** (mismo flujo, `admin` / `admin` si no creaste usuario, cookies sin `Secure` forzado):
+
+- Mantén **`NODE_ENV=development`** en el `.env` del servidor (no uses `production` hasta que quieras endurecer).
+- Con **Nginx** delante, pon **`TRUST_PROXY=1`** para que el rate limit de login use la IP real del visitante.
+- Sigue definiendo **`DATA_ENCRYPTION_KEY`** y **`SESSION_SECRET`** (el servidor no arranca sin ellos).
+
+Cuando quieras pasar a productivo: **`NODE_ENV=production`**, HTTPS, y **`ACCOUNTING_ADMIN_USER` / `ACCOUNTING_ADMIN_PASSWORD`** obligatorios si aún no existe `data/users.enc`.
+
 ## Próximos pasos
 
 - Sesiones persistentes en Redis u otro store si escalas varias instancias.

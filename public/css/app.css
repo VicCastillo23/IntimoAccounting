@@ -726,7 +726,8 @@ body.nav-drawer-open .nav-backdrop {
   width: 30%;
 }
 .poliza-lines-table--modal col.poliza-colgroup-cuenta {
-  width: 4.75rem;
+  width: 11rem;
+  min-width: 9.5rem;
 }
 .poliza-lines-table--modal col.poliza-colgroup-nombre {
   width: 18%;
@@ -780,6 +781,29 @@ body.nav-drawer-open .nav-backdrop {
   padding-left: 0.3rem;
   padding-right: 1.5rem;
   font-size: 0.75rem;
+}
+
+.modal--poliza .line-input--select.line-input--account-preset {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  font-size: 0.75rem;
+}
+
+.poliza-account-preset-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.poliza-account-preset-wrap .poliza-account-custom {
+  width: 100%;
+  min-width: 0;
+}
+
+.poliza-lines-table--modal .poliza-col-cuenta--preset {
+  vertical-align: top;
 }
 
 .poliza-lines-table--modal .poliza-col-depto {

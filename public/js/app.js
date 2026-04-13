@@ -122,6 +122,70 @@ function deptoSelectOptions(selected) {
   return opts.map(([v, label]) => `<option value="${v}" ${v === d ? "selected" : ""}>${label}</option>`).join("");
 }
 
+/** Catálogo contable (captura en modal). */
+const ACCOUNT_PRESETS = [
+  { code: "401-01", name: "Ventas al 16%" },
+  { code: "401-02", name: "Ventas al 0%" },
+  { code: "207-01", name: "IVA pendiente de trasladar" },
+  { code: "208-01", name: "IVA trasladado" },
+  { code: "101-01", name: "Caja Chica" },
+  { code: "102-01", name: "BBVA cuenta xxxxx" },
+  { code: "106-01", name: "Cuentas por cobrar a corto plazo" },
+];
+
+const ACCOUNT_PRESET_OTHER = "__other__";
+
+/**
+ * 1xx → debe; 2xx y 4xx → haber. Otros primeros dígitos: sin reasignar automático.
+ * @returns {"debit" | "credit" | null}
+ */
+function accountSideFromCode(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const first = s[0];
+  if (first === "1") return "debit";
+  if (first === "2" || first === "4") return "credit";
+  return null;
+}
+
+/**
+ * Mueve el importe a la casilla correcta según el no. de cuenta (un solo importe por línea).
+ * @param {object} line
+ */
+function applyAmountSideToLine(line) {
+  const side = accountSideFromCode(line.accountCode);
+  if (!side) return;
+  const d = Number(line.debit) || 0;
+  const c = Number(line.credit) || 0;
+  if (d === 0 && c === 0) return;
+  const total = d + c;
+  if (side === "debit") {
+    line.debit = total;
+    line.credit = 0;
+  } else {
+    line.credit = total;
+    line.debit = 0;
+  }
+}
+
+function accountPresetSelectValue(line) {
+  const code = String(line.accountCode || "").trim();
+  if (!code) return "";
+  const hit = ACCOUNT_PRESETS.find((p) => p.code === code);
+  return hit ? hit.code : ACCOUNT_PRESET_OTHER;
+}
+
+function accountPresetOptionsHtml(selectedValue) {
+  const opt = (code, label) =>
+    `<option value="${escapeAttr(code)}" ${code === selectedValue ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  const rows = ACCOUNT_PRESETS.map((p) => opt(p.code, `${p.code} ${p.name}`));
+  rows.unshift(
+    `<option value="" ${selectedValue === "" ? "selected" : ""}>${escapeHtml("— Seleccionar cuenta —")}</option>`
+  );
+  rows.push(opt(ACCOUNT_PRESET_OTHER, "Otros… (escribe no. cuenta y nombre)"));
+  return rows.join("");
+}
+
 function facturaCellEdit(line, i) {
   const u = String(line.invoiceUrl || "").trim();
   if (u && /^https?:\/\//i.test(u)) {
@@ -138,10 +202,42 @@ function formatLineAmountDisplay(n) {
   return new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
 }
 
+function syncRowAmountInputs(row, line) {
+  const d = row.querySelector('[data-field="debit"]');
+  const c = row.querySelector('[data-field="credit"]');
+  if (d) d.value = formatAmountForInput(line.debit);
+  if (c) c.value = formatAmountForInput(line.credit);
+}
+
 function lineTotals(lines) {
   const debit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
   const credit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
   return { debit, credit, balanced: Math.abs(debit - credit) < 0.005 };
+}
+
+/** Misma forma que al guardar en API (solo líneas del modal). */
+function mapCreateLinesToPayload() {
+  return createLines.map((l) => ({
+    ticketId: String(l.ticketId || "").trim(),
+    accountCode: String(l.accountCode || "").trim(),
+    accountName: String(l.accountName || "").trim(),
+    debit: Number(l.debit) || 0,
+    credit: Number(l.credit) || 0,
+    lineConcept: String(l.lineConcept || "").trim(),
+    invoiceUrl: String(l.invoiceUrl || "").trim(),
+    fxCurrency: ["MX", "USD", "CAD", "EUR"].includes(String(l.fxCurrency || "MX").toUpperCase())
+      ? String(l.fxCurrency).toUpperCase()
+      : "MX",
+    depto: ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"].includes(String(l.depto || "ADMINISTRACION").toUpperCase())
+      ? String(l.depto || "ADMINISTRACION").toUpperCase()
+      : "ADMINISTRACION",
+  }));
+}
+
+function filterValidPolizaLines(lines) {
+  return lines.filter(
+    (l) => (l.ticketId || l.accountCode) && (l.debit > 0 || l.credit > 0)
+  );
 }
 
 function typeShort(t) {
@@ -231,8 +327,8 @@ function getMockNewPolizaTemplate() {
     lines: [
       {
         ticketId: "T-0411-0082",
-        accountCode: "105.01",
-        accountName: "Caja general",
+        accountCode: "101-01",
+        accountName: "Caja Chica",
         lineConcept: "Venta ticket mostrador",
         invoiceUrl: "https://example.com/cfdi/ticket-0082.xml",
         fxCurrency: "MX",
@@ -242,8 +338,8 @@ function getMockNewPolizaTemplate() {
       },
       {
         ticketId: "T-0411-0083",
-        accountCode: "105.01",
-        accountName: "Caja general",
+        accountCode: "101-01",
+        accountName: "Caja Chica",
         lineConcept: "Venta ticket (pendiente factura)",
         invoiceUrl: "",
         fxCurrency: "MX",
@@ -253,8 +349,8 @@ function getMockNewPolizaTemplate() {
       },
       {
         ticketId: "T-0411-0084",
-        accountCode: "105.01",
-        accountName: "Caja general",
+        accountCode: "101-01",
+        accountName: "Caja Chica",
         lineConcept: "Venta ticket",
         invoiceUrl: "https://example.com/cfdi/ticket-0084.pdf",
         fxCurrency: "USD",
@@ -264,8 +360,8 @@ function getMockNewPolizaTemplate() {
       },
       {
         ticketId: "",
-        accountCode: "401.01",
-        accountName: "Ventas nacionales",
+        accountCode: "401-01",
+        accountName: "Ventas al 16%",
         lineConcept: "Consolidado ventas",
         invoiceUrl: "",
         fxCurrency: "MX",
@@ -275,8 +371,8 @@ function getMockNewPolizaTemplate() {
       },
       {
         ticketId: "",
-        accountCode: "208.01",
-        accountName: "IVA trasladado cobrado",
+        accountCode: "208-01",
+        accountName: "IVA trasladado",
         lineConcept: "IVA 16 %",
         invoiceUrl: "",
         fxCurrency: "MX",
@@ -469,15 +565,40 @@ function renderViewer() {
 }
 
 function updateCreateTotalsBar() {
-  const { debit, credit, balanced } = lineTotals(createLines);
+  const payloadLines = mapCreateLinesToPayload();
+  const validLines = filterValidPolizaLines(payloadLines);
+  const { debit, credit, balanced } = lineTotals(validLines);
+  const conceptOk = Boolean($("#create-concept")?.value?.trim());
   const bar = $("#create-totals");
   if (!bar) return;
-  bar.className = "totals-bar" + (createLines.length >= 2 && !balanced ? " totals-bar--warn" : "");
+  const needsWarn = validLines.length >= 2 && !balanced;
+  bar.className = "totals-bar" + (needsWarn ? " totals-bar--warn" : "");
   bar.innerHTML = `
     <span>Debe: <strong>${formatMoney(debit)}</strong></span>
     <span>Haber: <strong>${formatMoney(credit)}</strong></span>
-    <span>${balanced && createLines.length >= 2 ? "✓ Cuadra" : createLines.length < 2 ? "—" : "⚠ Debe cuadrar"}</span>
+    <span>${
+      validLines.length < 2
+        ? "—"
+        : balanced
+          ? "✓ Cuadra"
+          : "⚠ Debe cuadrar (debe = haber)"
+    }</span>
   `;
+
+  const btn = $("#btn-save-poliza");
+  if (btn) {
+    const canSave = validLines.length >= 2 && balanced && conceptOk;
+    btn.disabled = !canSave;
+    if (canSave) {
+      btn.removeAttribute("title");
+    } else if (!conceptOk) {
+      btn.title = "Escribe un concepto general para poder guardar.";
+    } else if (validLines.length < 2) {
+      btn.title = "Se requieren al menos dos líneas con cuenta o ticket e importe.";
+    } else if (!balanced) {
+      btn.title = "La póliza no cuadra: la suma del debe debe igualar la del haber.";
+    }
+  }
 }
 
 function renderCreateLinesTable() {
@@ -494,12 +615,22 @@ function renderCreateLinesTable() {
       const debitVal = formatAmountForInput(line.debit);
       const creditVal = formatAmountForInput(line.credit);
       const ticketConceptVal = joinTicketConceptBlock(line.ticketId, line.lineConcept);
+      const presetVal = accountPresetSelectValue(line);
+      const showCustomAccount = presetVal === ACCOUNT_PRESET_OTHER;
+      const customCls = "line-input poliza-account-custom";
+      const customExtra = showCustomAccount ? "" : " visually-hidden";
+      const customDisabled = showCustomAccount ? "" : " disabled";
       return `
     <tr data-idx="${i}">
       <td class="poliza-col-ticket-concept">
         <textarea class="line-input poliza-line-concept-textarea poliza-ticket-concept-unified" data-field="ticketConceptBlock" rows="3" placeholder="Primera línea: T-0411-0082 · Luego el concepto del movimiento">${escapeHtml(ticketConceptVal)}</textarea>
       </td>
-      <td class="poliza-col-cuenta"><input class="line-input" type="text" data-field="accountCode" value="${escapeAttr(line.accountCode)}" /></td>
+      <td class="poliza-col-cuenta poliza-col-cuenta--preset">
+        <div class="poliza-account-preset-wrap">
+          <select class="line-input line-input--select line-input--account-preset" data-field="accountPreset">${accountPresetOptionsHtml(presetVal)}</select>
+          <input class="${customCls}${customExtra}" type="text" data-field="accountCode" placeholder="No. cuenta (ej. 101-01)" autocomplete="off" value="${escapeAttr(line.accountCode)}" aria-label="Número de cuenta si eliges Otros"${customDisabled} />
+        </div>
+      </td>
       <td class="poliza-col-nombre"><input class="line-input" type="text" data-field="accountName" value="${escapeAttr(line.accountName)}" /></td>
       <td class="poliza-col-depto">
         <select class="line-input line-input--select line-input--depto-compact" data-field="depto">${deptoSelectOptions(line.depto || "ADMINISTRACION")}</select>
@@ -574,6 +705,13 @@ function wireUi() {
   $("#search-input").addEventListener("input", (e) => {
     searchQ = e.target.value;
     renderTable();
+  });
+
+  $("#create-concept")?.addEventListener("input", () => {
+    if (isCreateModalOpen()) updateCreateTotalsBar();
+  });
+  $("#create-type")?.addEventListener("change", () => {
+    if (isCreateModalOpen()) updateCreateTotalsBar();
   });
 
   document.querySelectorAll(".filters .chip").forEach((btn) => {
@@ -685,16 +823,40 @@ function wireUi() {
     if (!row || !isCreateModalOpen()) return;
     const idx = Number(row.getAttribute("data-idx"));
     const field = t.getAttribute("data-field");
-    if (field === "fxCurrency" && createLines[idx]) {
-      createLines[idx].fxCurrency = t.value;
+    const line = createLines[idx];
+    if (field === "accountPreset" && line) {
+      const v = t.value;
+      if (v === "") {
+        line.accountCode = "";
+        line.accountName = "";
+      } else if (v === ACCOUNT_PRESET_OTHER) {
+        const wasPreset = ACCOUNT_PRESETS.some((p) => p.code === line.accountCode);
+        if (wasPreset) {
+          line.accountCode = "";
+          line.accountName = "";
+        }
+      } else {
+        const p = ACCOUNT_PRESETS.find((x) => x.code === v);
+        if (p) {
+          line.accountCode = p.code;
+          line.accountName = p.name;
+        }
+      }
+      applyAmountSideToLine(line);
+      renderCreateLinesTable();
+      updateCreateTotalsBar();
+      return;
+    }
+    if (field === "fxCurrency" && line) {
+      line.fxCurrency = t.value;
       const p = currencyPrefix(t.value);
       row.querySelectorAll(".poliza-amt-prefix").forEach((el) => {
         el.textContent = p;
       });
       updateCreateTotalsBar();
     }
-    if (field === "depto" && createLines[idx]) {
-      createLines[idx].depto = t.value;
+    if (field === "depto" && line) {
+      line.depto = t.value;
       updateCreateTotalsBar();
     }
   });
@@ -722,12 +884,27 @@ function wireUi() {
         const row = t.closest("tr[data-idx]");
         if (!row) return;
         const idx = Number(row.getAttribute("data-idx"));
-        if (!createLines[idx]) return;
+        const line = createLines[idx];
+        if (!line) return;
         const num = parseAmountInputString(t.value);
-        createLines[idx][field] = num;
-        t.value = formatAmountForInput(num);
+        line[field] = num;
+        applyAmountSideToLine(line);
+        syncRowAmountInputs(row, line);
         updateCreateTotalsBar();
       }
+      return;
+    }
+
+    if (t.getAttribute("data-field") === "accountCode") {
+      const row = t.closest("tr[data-idx]");
+      if (!row) return;
+      const idx = Number(row.getAttribute("data-idx"));
+      const line = createLines[idx];
+      if (!line) return;
+      line.accountCode = String(t.value || "").trim();
+      applyAmountSideToLine(line);
+      syncRowAmountInputs(row, line);
+      updateCreateTotalsBar();
       return;
     }
 
@@ -766,24 +943,8 @@ function wireUi() {
 async function savePoliza() {
   const type = $("#create-type")?.value || "DIARIO";
   const concept = $("#create-concept")?.value?.trim() || "";
-  const lines = createLines.map((l) => ({
-    ticketId: String(l.ticketId || "").trim(),
-    accountCode: l.accountCode.trim(),
-    accountName: l.accountName.trim(),
-    debit: Number(l.debit) || 0,
-    credit: Number(l.credit) || 0,
-    lineConcept: String(l.lineConcept || "").trim(),
-    invoiceUrl: String(l.invoiceUrl || "").trim(),
-    fxCurrency: ["MX", "USD", "CAD", "EUR"].includes(String(l.fxCurrency || "MX").toUpperCase())
-      ? String(l.fxCurrency).toUpperCase()
-      : "MX",
-    depto: ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"].includes(String(l.depto || "ADMINISTRACION").toUpperCase())
-      ? String(l.depto || "ADMINISTRACION").toUpperCase()
-      : "ADMINISTRACION",
-  }));
-  const validLines = lines.filter(
-    (l) => (l.ticketId || l.accountCode) && (l.debit > 0 || l.credit > 0)
-  );
+  const lines = mapCreateLinesToPayload();
+  const validLines = filterValidPolizaLines(lines);
   if (validLines.length < 2) {
     showAlert("Completa al menos dos líneas con ticket o cuenta y debe o haber.");
     return;
@@ -794,7 +955,9 @@ async function savePoliza() {
   }
   const t = lineTotals(validLines);
   if (!t.balanced) {
-    showAlert("Los totales de debe y haber deben coincidir.");
+    showAlert(
+      "No se puede guardar: la póliza no cuadra. La suma del debe debe ser igual a la del haber."
+    );
     return;
   }
   const btn = $("#btn-save-poliza");

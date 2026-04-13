@@ -22,7 +22,12 @@ const publicDir = path.join(__dirname, "..", "public");
 const app = express();
 const port = Number(process.env.PORT) || 3010;
 
-if (process.env.NODE_ENV === "production") {
+const trustProxyEnv = String(process.env.TRUST_PROXY || "").toLowerCase();
+const useTrustProxy =
+  process.env.NODE_ENV === "production" ||
+  trustProxyEnv === "1" ||
+  trustProxyEnv === "true";
+if (useTrustProxy) {
   app.set("trust proxy", 1);
 }
 
