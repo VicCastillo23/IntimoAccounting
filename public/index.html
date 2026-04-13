@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <title>Íntimo · Contabilidad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegación">
+      <div class="sidebar__brand">
+        <div class="sidebar__wordmark" aria-hidden="true">Íntimo</div>
+        <p class="sidebar__app-label">Contabilidad · Pólizas</p>
+      </div>
+      <nav class="sidebar__nav">
+        <a class="sidebar__link sidebar__link--active" href="/">
+          <span class="material-symbols-outlined" aria-hidden="true">balance</span>
+          Pólizas
+        </a>
+        <a class="sidebar__link" href="/health" target="_blank" rel="noopener">
+          <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
+          Estado del servicio
+        </a>
+      </nav>
+      <p class="sidebar__foot">Mock en memoria · sync con tablet y BD en siguientes pasos</p>
+    </aside>
+
+    <main class="main">
+      <header class="main__header">
+        <h1 class="main__h1">Pólizas contables</h1>
+        <p class="main__lead">
+          Listado de asientos con movimientos dinámicos. Los datos de ejemplo anticipan referencias a órdenes y movimientos
+          como los que registra la tablet; más adelante se alimentará desde la misma base de hechos económicos.
+        </p>
+      </header>
+
+      <section class="panel" aria-labelledby="search-label">
+        <div class="toolbar-row">
+          <div class="search-field">
+            <span class="material-symbols-outlined search-field__icon" aria-hidden="true">search</span>
+            <label id="search-label" class="visually-hidden" for="search-input">Buscar</label>
+            <input
+              id="search-input"
+              class="search-field__input"
+              type="search"
+              placeholder="Folio, concepto, cuenta…"
+              autocomplete="off"
+            />
+          </div>
+          <div class="filters" role="group" aria-label="Filtrar por tipo">
+            <button type="button" class="chip chip--selected" data-filter="all">Todas</button>
+            <button type="button" class="chip" data-filter="DIARIO">Diario</button>
+            <button type="button" class="chip" data-filter="INGRESOS">Ingresos</button>
+            <button type="button" class="chip" data-filter="EGRESOS">Egresos</button>
+          </div>
+          <button type="button" class="btn btn--primary" id="btn-new-poliza">
+            <span class="material-symbols-outlined btn__icon" aria-hidden="true">add</span>
+            Nueva póliza
+          </button>
+        </div>
+
+        <div id="alert-slot"></div>
+
+        <div class="table-wrap">
+          <table class="data-table" id="polizas-table">
+            <thead>
+              <tr>
+                <th>Folio</th>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Concepto</th>
+                <th>Origen</th>
+                <th class="data-table__num">Cargos</th>
+                <th class="data-table__num">Abonos</th>
+                <th class="data-table__col-action">Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="polizas-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: ver movimientos -->
+  <div class="modal-backdrop" id="modal-view" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-view-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="modal-view-title">Póliza</h2>
+        <button type="button" class="btn btn--text modal__close" data-close-modal="view" aria-label="Cerrar">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal__body" id="modal-view-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal: nueva póliza -->
+  <div class="modal-backdrop" id="modal-create" hidden>
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="modal-create-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="modal-create-title">Nueva póliza</h2>
+        <button type="button" class="btn btn--text modal__close" data-close-modal="create" aria-label="Cerrar">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field__label">Tipo</span>
+            <select id="create-type" class="field__input">
+              <option value="DIARIO">Diario</option>
+              <option value="INGRESOS">Ingresos</option>
+              <option value="EGRESOS">Egresos</option>
+            </select>
+          </label>
+          <label class="field field--full">
+            <span class="field__label">Concepto</span>
+            <input id="create-concept" class="field__input" type="text" placeholder="Descripción del asiento" />
+          </label>
+        </div>
+        <p class="modal__hint">Añade líneas: en cada renglón solo cargo o abono (el otro en cero). La suma de cargos debe igualar la de abonos.</p>
+        <div class="table-wrap table-wrap--tight">
+          <table class="data-table data-table--compact" id="create-lines-table">
+            <thead>
+              <tr>
+                <th>Cuenta</th>
+                <th>Nombre</th>
+                <th class="data-table__num">Cargo</th>
+                <th class="data-table__num">Abono</th>
+                <th class="data-table__col-action"></th>
+              </tr>
+            </thead>
+            <tbody id="create-lines-tbody"></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn--text btn--sm" id="btn-add-line">
+          <span class="material-symbols-outlined btn__icon" aria-hidden="true">add</span>
+          Añadir línea
+        </button>
+        <div class="totals-bar" id="create-totals"></div>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--text" data-close-modal="create">Cancelar</button>
+        <button type="button" class="btn btn--primary" id="btn-save-poliza">Guardar póliza</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js" type="module"></script>
+</body>
+</html>
