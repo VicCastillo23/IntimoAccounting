@@ -67,6 +67,50 @@ let viewerMode = "empty";
 
 const createLines = [];
 
+/** Datos de demostración al abrir «Nueva póliza» (no se guardan hasta pulsar Guardar). */
+function getMockNewPolizaTemplate() {
+  return {
+    type: "INGRESOS",
+    concept:
+      "Venta F-FACT 34 — consumo mostrador 39A39FB5-BF11-45AA-8B27-D7E0E29E1F8A (demo prellenado)",
+    lines: [
+      {
+        accountCode: "105.01",
+        accountName: "Caja general",
+        depto: "0",
+        centro: "0",
+        proyecto: "0",
+        lineConcept: "Cobro efectivo ticket mostrador",
+        exchangeRate: 1,
+        debit: 1160,
+        credit: 0,
+      },
+      {
+        accountCode: "401.01",
+        accountName: "Ventas y/o servicios nacionales",
+        depto: "0",
+        centro: "0",
+        proyecto: "0",
+        lineConcept: "Consumo alimentos clave 90101500",
+        exchangeRate: 1,
+        debit: 0,
+        credit: 1000,
+      },
+      {
+        accountCode: "208.01",
+        accountName: "IVA trasladado cobrado",
+        depto: "0",
+        centro: "0",
+        proyecto: "0",
+        lineConcept: "IVA 16 %",
+        exchangeRate: 1,
+        debit: 0,
+        credit: 160,
+      },
+    ],
+  };
+}
+
 function sourceLabel(ref) {
   if (!ref || !ref.kind) return "—";
   if (ref.kind === "manual") return "Manual";
@@ -173,7 +217,8 @@ function renderViewer() {
             <input id="create-concept" class="field__input" type="text" placeholder="Descripción del asiento" />
           </div>
         </div>
-        <p class="modal__hint" style="margin:0 0 0.75rem;font-size:0.8125rem">Movimientos: solo cargo o abono por línea. Suma de cargos = suma de abonos.</p>
+        <p class="modal__hint" style="margin:0 0 0.35rem;font-size:0.8125rem">Movimientos: solo cargo o abono por línea. Suma de cargos = suma de abonos.</p>
+        <p class="poliza-mock-hint">Plantilla de ejemplo (venta + IVA); puedes editar antes de guardar.</p>
         <div class="poliza-lines-wrap">
           <table class="poliza-lines-table">
             <thead>
@@ -342,17 +387,15 @@ function openCreate() {
   selectedIdBeforeCreate = selectedId;
   selectedId = null;
   viewerMode = "create";
+  const tpl = getMockNewPolizaTemplate();
   createLines.length = 0;
-  createLines.push(
-    { accountCode: "", accountName: "", depto: "0", centro: "0", proyecto: "0", lineConcept: "", exchangeRate: 1, debit: 0, credit: 0 },
-    { accountCode: "", accountName: "", depto: "0", centro: "0", proyecto: "0", lineConcept: "", exchangeRate: 1, debit: 0, credit: 0 }
-  );
+  tpl.lines.forEach((line) => createLines.push({ ...line }));
   renderTable();
   renderViewer();
   const sel = $("#create-type");
-  if (sel) sel.value = "DIARIO";
+  if (sel) sel.value = tpl.type;
   const conc = $("#create-concept");
-  if (conc) conc.value = "";
+  if (conc) conc.value = tpl.concept;
   showAlert("");
 }
 

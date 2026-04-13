@@ -967,6 +967,13 @@ body {
   grid-column: 1 / -1;
 }
 
+.poliza-mock-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--intimo-gray-muted);
+  line-height: 1.4;
+}
+
 @media (max-width: 1100px) {
   .polizas-workspace {
     grid-template-columns: 1fr;
