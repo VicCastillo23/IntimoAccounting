@@ -21,7 +21,9 @@ Aplicación web para **pólizas contables** (asientos con movimientos dinámicos
    npm run gen:session-secret # SESSION_SECRET
    ```
 
-3. **Primera ejecución:** si no existen `data/users.enc` ni `data/polizas.enc`, el servidor crea:
+3. **Pólizas y cierre diario:** la pantalla de pólizas está preparada para un **job nocturno** (cron / EventBridge) que, al finalizar el día operativo, lea la base de datos alineada con la tablet y ventas para insertar o actualizar asientos. Eso se implementará contra PostgreSQL u otro motor; el modelo de líneas ya incluye dimensiones (depto / centro / proyecto) y concepto por movimiento.
+
+4. **Primera ejecución:** si no existen `data/users.enc` ni `data/polizas.enc`, el servidor crea:
 
    - Usuario inicial: en **desarrollo**, si no defines `ACCOUNTING_ADMIN_*`, se usa `admin` / `admin` (aparece advertencia en consola). En **producción** debes definir `ACCOUNTING_ADMIN_USER` y `ACCOUNTING_ADMIN_PASSWORD`.
    - Pólizas de ejemplo: se generan a partir del mock y se guardan cifradas en `data/polizas.enc`.
@@ -32,6 +34,8 @@ Aplicación web para **pólizas contables** (asientos con movimientos dinámicos
 npm install
 npm run dev
 ```
+
+La vista **Pólizas** usa layout listado + visualizador (maestro/detalle), captura en el panel derecho y textos de ayuda sobre la integración diaria con BD.
 
 Abre [http://localhost:3010](http://localhost:3010). Sin sesión, se redirige a `/login.html`.
 
