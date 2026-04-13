@@ -1,22 +1,42 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
+import session from "express-session";
 import path from "path";
-import { fileURLToPath } from "url";
-import { initialPolizas } from "./mock/polizas.js";
+import { fileURLToPath } from "node:url";
+import { parseKeyHex } from "./crypto/vault.js";
+import { getSessionMiddleware } from "./auth/sessionConfig.js";
+import { requireAuth } from "./auth/middleware.js";
+import { handleLogin, handleLogout, handleMe } from "./auth/routes.js";
+import { initUsersStore } from "./auth/usersStore.js";
+import {
+  initPolizasStore,
+  getPolizas,
+  addPoliza,
+  nextFolio,
+} from "./store/polizasStore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.join(__dirname, "..", "public");
 const app = express();
 const port = Number(process.env.PORT) || 3010;
 
-/** @type {typeof initialPolizas} */
-let polizas = structuredClone(initialPolizas);
-let seq = polizas.length + 1;
-
-function nextFolio() {
-  const y = new Date().getFullYear();
-  const n = String(seq++).padStart(4, "0");
-  return `P-${y}-${n}`;
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
 }
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
+
+const dataKey = parseKeyHex(process.env.DATA_ENCRYPTION_KEY);
+initUsersStore(dataKey);
+initPolizasStore(dataKey);
+
+app.use(getSessionMiddleware(session));
+app.use(express.json({ limit: "512kb" }));
 
 function totals(lines) {
   const debit = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
@@ -24,23 +44,23 @@ function totals(lines) {
   return { debit, credit, balanced: Math.abs(debit - credit) < 0.005 };
 }
 
-app.use(express.json());
-
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "intimo-accounting",
     env: process.env.NODE_ENV || "development",
-    polizasCount: polizas.length,
-    note: "Mock en memoria; BD y sync con tablet en siguientes iteraciones.",
   });
 });
 
-app.get("/api/polizas", (_req, res) => {
-  res.json({ success: true, data: polizas });
+app.post("/api/auth/login", handleLogin);
+app.post("/api/auth/logout", handleLogout);
+app.get("/api/auth/me", handleMe);
+
+app.get("/api/polizas", requireAuth, (_req, res) => {
+  res.json({ success: true, data: getPolizas() });
 });
 
-app.post("/api/polizas", (req, res) => {
+app.post("/api/polizas", requireAuth, (req, res) => {
   const { type, concept, lines } = req.body || {};
   if (!type || !concept || !Array.isArray(lines) || lines.length < 2) {
     return res.status(400).json({
@@ -70,16 +90,31 @@ app.post("/api/polizas", (req, res) => {
       credit: Number(l.credit) || 0,
     })),
   };
-  polizas = [row, ...polizas];
+  addPoliza(row);
   res.status(201).json({ success: true, data: row });
 });
 
-const publicDir = path.join(__dirname, "..", "public");
-app.use(express.static(publicDir));
-
-app.get("*", (_req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
+app.get("/login.html", (_req, res) => {
+  res.sendFile(path.join(publicDir, "login.html"));
 });
+
+function sendAppIfAuthed(req, res) {
+  if (!req.session?.userId) {
+    return res.redirect("/login.html");
+  }
+  res.sendFile(path.join(publicDir, "index.html"));
+}
+
+app.get("/index.html", sendAppIfAuthed);
+
+app.use(
+  express.static(publicDir, {
+    index: false,
+    fallthrough: true,
+  })
+);
+
+app.get("/", sendAppIfAuthed);
 
 app.listen(port, "0.0.0.0", () => {
   console.log(`intimo-accounting http://localhost:${port}`);

@@ -1,5 +1,16 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 
+function apiFetch(url, opts = {}) {
+  return fetch(url, { credentials: "include", ...opts });
+}
+
+async function ensureAuthed(res) {
+  if (res.status === 401) {
+    window.location.href = "/login.html";
+    throw new Error("Sesión expirada.");
+  }
+}
+
 function formatMoney(n) {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -85,7 +96,8 @@ function escapeAttr(s) {
 }
 
 async function load() {
-  const res = await fetch("/api/polizas");
+  const res = await apiFetch("/api/polizas");
+  await ensureAuthed(res);
   const json = await res.json();
   if (!json.success) throw new Error(json.message || "Error al cargar");
   polizas = json.data || [];
@@ -99,81 +111,10 @@ function showAlert(msg, kind = "error") {
     : "";
 }
 
-$("#search-input").addEventListener("input", (e) => {
-  searchQ = e.target.value;
-  renderTable();
-});
-
-document.querySelectorAll(".filters .chip").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".filters .chip").forEach((b) => b.classList.remove("chip--selected"));
-    btn.classList.add("chip--selected");
-    filterType = btn.getAttribute("data-filter") || "all";
-    renderTable();
-  });
-});
-
-/* Ver detalle */
-$("#polizas-tbody").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-action=view]");
-  if (!btn) return;
-  const id = btn.getAttribute("data-id");
-  const p = polizas.find((x) => x.id === id);
-  if (!p) return;
-  const { debit, credit, balanced } = lineTotals(p.lines || []);
-  $("#modal-view-title").textContent = p.folio;
-  $("#modal-view-body").innerHTML = `
-    <div class="detail-meta">
-      <strong>${escapeHtml(p.type)}</strong> · ${escapeHtml(p.date)}<br />
-      ${escapeHtml(p.concept)}<br />
-      Origen: ${escapeHtml(sourceLabel(p.sourceRef))}
-    </div>
-    <div class="detail-lines table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Cuenta</th>
-            <th>Nombre</th>
-            <th class="data-table__num">Cargo</th>
-            <th class="data-table__num">Abono</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(p.lines || [])
-            .map(
-              (l) => `
-            <tr>
-              <td>${escapeHtml(l.accountCode)}</td>
-              <td>${escapeHtml(l.accountName)}</td>
-              <td class="data-table__num">${formatMoney(l.debit)}</td>
-              <td class="data-table__num">${formatMoney(l.credit)}</td>
-            </tr>`
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-    <p class="detail-meta" style="margin-top:1rem">
-      Totales: cargo ${formatMoney(debit)} · abono ${formatMoney(credit)}
-      ${balanced ? ` · <span class="badge badge--success">Cuadra</span>` : ` · <span class="badge" style="background:var(--intimo-warning-bg);color:var(--intimo-warning)">Revisar</span>`}
-    </p>
-  `;
-  $("#modal-view").hidden = false;
-});
-
 function closeModal(name) {
   $(`#modal-${name}`).hidden = true;
 }
 
-document.querySelectorAll("[data-close-modal]").forEach((el) => {
-  el.addEventListener("click", () => closeModal(el.getAttribute("data-close-modal")));
-});
-
-$("#modal-view").addEventListener("click", (e) => {
-  if (e.target.id === "modal-view") closeModal("view");
-});
-
-/* Crear */
 const createLines = [];
 
 function updateCreateTotalsBar() {
@@ -210,94 +151,190 @@ function renderCreateLines() {
   updateCreateTotalsBar();
 }
 
-$("#create-lines-tbody").addEventListener("input", (e) => {
-  const row = e.target.closest("tr[data-idx]");
-  if (!row) return;
-  const idx = Number(row.getAttribute("data-idx"));
-  const field = e.target.getAttribute("data-field");
-  if (!field || !createLines[idx]) return;
-  const val = e.target.value;
-  if (field === "debit" || field === "credit") {
-    createLines[idx][field] = val === "" ? 0 : Number(val);
-  } else {
-    createLines[idx][field] = val;
-  }
-  updateCreateTotalsBar();
-});
-
-$("#create-lines-tbody").addEventListener("click", (e) => {
-  const rm = e.target.closest("[data-remove-line]");
-  if (!rm) return;
-  const i = Number(rm.getAttribute("data-remove-line"));
-  createLines.splice(i, 1);
-  renderCreateLines();
-});
-
-$("#btn-add-line").addEventListener("click", () => {
-  createLines.push({ accountCode: "", accountName: "", debit: 0, credit: 0 });
-  renderCreateLines();
-});
-
-$("#btn-new-poliza").addEventListener("click", () => {
-  $("#create-type").value = "DIARIO";
-  $("#create-concept").value = "";
-  createLines.length = 0;
-  createLines.push(
-    { accountCode: "", accountName: "", debit: 0, credit: 0 },
-    { accountCode: "", accountName: "", debit: 0, credit: 0 }
-  );
-  renderCreateLines();
-  showAlert("");
-  $("#modal-create").hidden = false;
-});
-
-$("#modal-create").addEventListener("click", (e) => {
-  if (e.target.id === "modal-create") closeModal("create");
-});
-
-$("#btn-save-poliza").addEventListener("click", async () => {
-  const type = $("#create-type").value;
-  const concept = $("#create-concept").value.trim();
-  const lines = createLines.map((l) => ({
-    accountCode: l.accountCode.trim(),
-    accountName: l.accountName.trim(),
-    debit: Number(l.debit) || 0,
-    credit: Number(l.credit) || 0,
-  }));
-  const validLines = lines.filter((l) => l.accountCode && (l.debit > 0 || l.credit > 0));
-  if (validLines.length < 2) {
-    showAlert("Completa al menos dos líneas con cuenta y un cargo o abono.");
-    return;
-  }
-  if (!concept) {
-    showAlert("Escribe un concepto.");
-    return;
-  }
-  const t = lineTotals(validLines);
-  if (!t.balanced) {
-    showAlert("Los totales de cargo y abono deben coincidir.");
-    return;
-  }
-  $("#btn-save-poliza").disabled = true;
-  try {
-    const res = await fetch("/api/polizas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, concept, lines: validLines }),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || "No se pudo guardar");
-    polizas = [json.data, ...polizas];
+function wireUi() {
+  $("#search-input").addEventListener("input", (e) => {
+    searchQ = e.target.value;
     renderTable();
-    closeModal("create");
-    showAlert("Póliza registrada (mock en memoria).", "success");
-  } catch (err) {
-    showAlert(err.message || "Error");
-  } finally {
-    $("#btn-save-poliza").disabled = false;
-  }
-});
+  });
 
-load().catch((err) => {
-  showAlert(err.message || "No se pudo conectar al servidor.");
-});
+  document.querySelectorAll(".filters .chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filters .chip").forEach((b) => b.classList.remove("chip--selected"));
+      btn.classList.add("chip--selected");
+      filterType = btn.getAttribute("data-filter") || "all";
+      renderTable();
+    });
+  });
+
+  $("#polizas-tbody").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action=view]");
+    if (!btn) return;
+    const id = btn.getAttribute("data-id");
+    const p = polizas.find((x) => x.id === id);
+    if (!p) return;
+    const { debit, credit, balanced } = lineTotals(p.lines || []);
+    $("#modal-view-title").textContent = p.folio;
+    $("#modal-view-body").innerHTML = `
+    <div class="detail-meta">
+      <strong>${escapeHtml(p.type)}</strong> · ${escapeHtml(p.date)}<br />
+      ${escapeHtml(p.concept)}<br />
+      Origen: ${escapeHtml(sourceLabel(p.sourceRef))}
+    </div>
+    <div class="detail-lines table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Cuenta</th>
+            <th>Nombre</th>
+            <th class="data-table__num">Cargo</th>
+            <th class="data-table__num">Abono</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(p.lines || [])
+            .map(
+              (l) => `
+            <tr>
+              <td>${escapeHtml(l.accountCode)}</td>
+              <td>${escapeHtml(l.accountName)}</td>
+              <td class="data-table__num">${formatMoney(l.debit)}</td>
+              <td class="data-table__num">${formatMoney(l.credit)}</td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+    <p class="detail-meta" style="margin-top:1rem">
+      Totales: cargo ${formatMoney(debit)} · abono ${formatMoney(credit)}
+      ${balanced ? ` · <span class="badge badge--success">Cuadra</span>` : ` · <span class="badge" style="background:var(--intimo-warning-bg);color:var(--intimo-warning)">Revisar</span>`}
+    </p>
+  `;
+    $("#modal-view").hidden = false;
+  });
+
+  document.querySelectorAll("[data-close-modal]").forEach((el) => {
+    el.addEventListener("click", () => closeModal(el.getAttribute("data-close-modal")));
+  });
+
+  $("#modal-view").addEventListener("click", (e) => {
+    if (e.target.id === "modal-view") closeModal("view");
+  });
+
+  $("#create-lines-tbody").addEventListener("input", (e) => {
+    const row = e.target.closest("tr[data-idx]");
+    if (!row) return;
+    const idx = Number(row.getAttribute("data-idx"));
+    const field = e.target.getAttribute("data-field");
+    if (!field || !createLines[idx]) return;
+    const val = e.target.value;
+    if (field === "debit" || field === "credit") {
+      createLines[idx][field] = val === "" ? 0 : Number(val);
+    } else {
+      createLines[idx][field] = val;
+    }
+    updateCreateTotalsBar();
+  });
+
+  $("#create-lines-tbody").addEventListener("click", (e) => {
+    const rm = e.target.closest("[data-remove-line]");
+    if (!rm) return;
+    const i = Number(rm.getAttribute("data-remove-line"));
+    createLines.splice(i, 1);
+    renderCreateLines();
+  });
+
+  $("#btn-add-line").addEventListener("click", () => {
+    createLines.push({ accountCode: "", accountName: "", debit: 0, credit: 0 });
+    renderCreateLines();
+  });
+
+  $("#btn-new-poliza").addEventListener("click", () => {
+    $("#create-type").value = "DIARIO";
+    $("#create-concept").value = "";
+    createLines.length = 0;
+    createLines.push(
+      { accountCode: "", accountName: "", debit: 0, credit: 0 },
+      { accountCode: "", accountName: "", debit: 0, credit: 0 }
+    );
+    renderCreateLines();
+    showAlert("");
+    $("#modal-create").hidden = false;
+  });
+
+  $("#modal-create").addEventListener("click", (e) => {
+    if (e.target.id === "modal-create") closeModal("create");
+  });
+
+  $("#btn-save-poliza").addEventListener("click", async () => {
+    const type = $("#create-type").value;
+    const concept = $("#create-concept").value.trim();
+    const lines = createLines.map((l) => ({
+      accountCode: l.accountCode.trim(),
+      accountName: l.accountName.trim(),
+      debit: Number(l.debit) || 0,
+      credit: Number(l.credit) || 0,
+    }));
+    const validLines = lines.filter((l) => l.accountCode && (l.debit > 0 || l.credit > 0));
+    if (validLines.length < 2) {
+      showAlert("Completa al menos dos líneas con cuenta y un cargo o abono.");
+      return;
+    }
+    if (!concept) {
+      showAlert("Escribe un concepto.");
+      return;
+    }
+    const t = lineTotals(validLines);
+    if (!t.balanced) {
+      showAlert("Los totales de cargo y abono deben coincidir.");
+      return;
+    }
+    $("#btn-save-poliza").disabled = true;
+    try {
+      const res = await apiFetch("/api/polizas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, concept, lines: validLines }),
+      });
+      await ensureAuthed(res);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "No se pudo guardar");
+      polizas = [json.data, ...polizas];
+      renderTable();
+      closeModal("create");
+      showAlert("Póliza guardada (persistencia cifrada en disco).", "success");
+    } catch (err) {
+      if (err.message !== "Sesión expirada.") showAlert(err.message || "Error");
+    } finally {
+      $("#btn-save-poliza").disabled = false;
+    }
+  });
+
+  $("#btn-logout").addEventListener("click", async () => {
+    try {
+      await apiFetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      /* ignorar */
+    }
+    window.location.href = "/login.html";
+  });
+}
+
+async function boot() {
+  const me = await apiFetch("/api/auth/me");
+  const j = await me.json();
+  if (!j.success || !j.user) {
+    window.location.href = "/login.html";
+    return;
+  }
+  const el = document.getElementById("session-user");
+  if (el) el.textContent = j.user.username;
+  wireUi();
+  try {
+    await load();
+  } catch (err) {
+    showAlert(err.message || "No se pudo conectar al servidor.");
+  }
+}
+
+boot();

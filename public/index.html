@@ -18,6 +18,7 @@
         <div class="sidebar__wordmark" aria-hidden="true">Íntimo</div>
         <p class="sidebar__app-label">Contabilidad · Pólizas</p>
       </div>
+      <p class="sidebar__session" id="session-label"><span id="session-user"></span></p>
       <nav class="sidebar__nav">
         <a class="sidebar__link sidebar__link--active" href="/">
           <span class="material-symbols-outlined" aria-hidden="true">balance</span>
@@ -27,8 +28,12 @@
           <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
           Estado del servicio
         </a>
+        <button type="button" class="sidebar__link sidebar__link--as-btn" id="btn-logout">
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          Cerrar sesión
+        </button>
       </nav>
-      <p class="sidebar__foot">Mock en memoria · sync con tablet y BD en siguientes pasos</p>
+      <p class="sidebar__foot">Datos en reposo cifrados (AES-256-GCM). HTTPS en producción.</p>
     </aside>
 
     <main class="main">

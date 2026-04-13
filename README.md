@@ -6,28 +6,64 @@ Aplicación web para **pólizas contables** (asientos con movimientos dinámicos
 
 - Node.js 20+
 
+## Configuración inicial
+
+1. Copia variables de entorno:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Genera secretos y pégalos en `.env`:
+
+   ```bash
+   npm run gen:data-key       # DATA_ENCRYPTION_KEY (64 hex)
+   npm run gen:session-secret # SESSION_SECRET
+   ```
+
+3. **Primera ejecución:** si no existen `data/users.enc` ni `data/polizas.enc`, el servidor crea:
+
+   - Usuario inicial: en **desarrollo**, si no defines `ACCOUNTING_ADMIN_*`, se usa `admin` / `admin` (aparece advertencia en consola). En **producción** debes definir `ACCOUNTING_ADMIN_USER` y `ACCOUNTING_ADMIN_PASSWORD`.
+   - Pólizas de ejemplo: se generan a partir del mock y se guardan cifradas en `data/polizas.enc`.
+
 ## Desarrollo local
 
 ```bash
 npm install
-cp .env.example .env   # opcional: PORT=3010 por defecto en código
 npm run dev
 ```
 
-Abre [http://localhost:3010](http://localhost:3010) (o el puerto definido en `PORT`).
+Abre [http://localhost:3010](http://localhost:3010). Sin sesión, se redirige a `/login.html`.
 
-- Los datos son **mock en memoria**; al reiniciar el servidor vuelven los ejemplos iniciales.
-- API: `GET /api/polizas`, `POST /api/polizas`, `GET /health`.
+## Seguridad (implementado)
+
+| Aspecto | Detalle |
+|--------|---------|
+| Contraseñas | **bcrypt** (cost 12); nunca en texto plano. |
+| Sesión | Cookie **httpOnly**, **sameSite=lax**; en producción **secure** con HTTPS. Firmada con `SESSION_SECRET`. |
+| Datos en disco | `data/users.enc` y `data/polizas.enc`: **AES-256-GCM** con `DATA_ENCRYPTION_KEY`. |
+| Tránsito | En producción usar **HTTPS** (Nginx + Let’s Encrypt en el EC2). En local el tráfego va en claro; no uses credenciales reales. |
+| Cabeceras | **Helmet** (CSP desactivada por compatibilidad con assets estáticos; se puede endurecer después). |
+| Fuerza bruta | Bloqueo temporal en `/api/auth/login` tras muchos fallos por IP. |
+
+**Nota:** Los datos solo existen descifrados en memoria del proceso Node mientras corre. Quien tenga la clave y los archivos `.enc` puede descifrarlos; protege el servidor y los backups como harías con cualquier secreto.
+
+## API (requiere sesión salvo login / me)
+
+- `POST /api/auth/login` — `{ username, password }`
+- `POST /api/auth/logout`
+- `GET /api/auth/me` — `{ user: null | { username } }`
+- `GET /api/polizas`, `POST /api/polizas`
+- `GET /health` — comprobación mínima (sin datos sensibles)
 
 ## Próximos pasos
 
-- Base de datos y modelo alineado a los mismos hechos económicos que registra la tablet (órdenes, pagos, etc.).
-- Despliegue en el **mismo EC2** que el resto del ecosistema: subdominio en Nginx como proxy reverso a este servicio (puerto interno fijo o socket), TLS con el certificado existente.
+- Sesiones persistentes en Redis u otro store si escalas varias instancias.
+- Base de datos (PostgreSQL) con cifrado en reposo a nivel volumen o columnas sensibles, según política.
+- Despliegue en el **mismo EC2**: subdominio en Nginx como proxy reverso, TLS.
 
 ## Repositorio remoto (GitHub)
 
-En la máquina local el proyecto ya puede tener `git init` y commits. Para publicarlo:
-
-1. Crea un repositorio vacío en GitHub (sin README si ya tienes uno local).
+1. Crea un repositorio vacío en GitHub.
 2. `git remote add origin https://github.com/TU_ORG/intimo-accounting.git`
 3. `git push -u origin main`

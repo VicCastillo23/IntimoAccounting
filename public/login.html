@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <title>Ingresar · Íntimo Contabilidad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="login-body">
+  <div class="login-page">
+    <div class="login-card panel">
+      <div class="login-card__brand">
+        <div class="login-card__wordmark">Íntimo</div>
+        <p class="login-card__subtitle">Contabilidad · acceso seguro</p>
+      </div>
+      <form id="login-form" class="login-form" autocomplete="on">
+        <div id="login-alert" class="login-alert" hidden></div>
+        <label class="field">
+          <span class="field__label">Usuario</span>
+          <input
+            id="login-user"
+            class="field__input"
+            name="username"
+            type="text"
+            autocomplete="username"
+            required
+            autocapitalize="none"
+          />
+        </label>
+        <label class="field">
+          <span class="field__label">Contraseña</span>
+          <input
+            id="login-pass"
+            class="field__input"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+        <button type="submit" class="btn btn--primary login-form__submit" id="login-submit">
+          <span class="material-symbols-outlined btn__icon" aria-hidden="true">login</span>
+          Entrar
+        </button>
+      </form>
+      <p class="login-foot">Conexión cifrada en producción (HTTPS). Datos en reposo cifrados en el servidor.</p>
+    </div>
+  </div>
+  <script src="/js/login.js" type="module"></script>
+</body>
+</html>

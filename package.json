@@ -6,13 +6,18 @@
   "description": "Contabilidad Íntimo — pólizas y reportes (misma familia visual que IntimoInvoicing)",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "gen:data-key": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+    "gen:session-secret": "node -e \"console.log(require('crypto').randomBytes(48).toString('base64'))\""
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.5",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "express-session": "^1.19.0",
+    "helmet": "^8.1.0"
   }
 }

@@ -2,3 +2,6 @@ node_modules/
 .env
 .DS_Store
 *.log
+
+# Archivos de datos cifrados (usuarios y pólizas)
+data/*.enc
