@@ -549,6 +549,64 @@ body {
   width: min(100%, 720px);
 }
 
+.modal--poliza {
+  width: min(1180px, 96vw);
+  max-width: 96vw;
+  max-height: min(92vh, 920px);
+}
+
+.modal__header--poliza {
+  align-items: center;
+}
+
+.modal__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.modal__body--poliza {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.modal__hint--poliza {
+  margin: 0 0 0.5rem !important;
+}
+
+.poliza-meta--modal {
+  margin-bottom: 1rem;
+}
+
+.poliza-lines-wrap--modal {
+  max-height: min(52vh, 520px);
+  margin-bottom: 0.75rem;
+}
+
+.poliza-lines-table--modal {
+  font-size: 0.8125rem;
+}
+
+.poliza-lines-table--modal th,
+.poliza-lines-table--modal td {
+  padding: 0.55rem 0.5rem;
+}
+
+.modal--poliza .line-input {
+  padding: 0.5rem 0.45rem;
+  font-size: 0.8125rem;
+}
+
+.modal--poliza .line-input--select {
+  font-size: 0.8125rem;
+  min-width: 7rem;
+}
+
+body.modal-poliza-open {
+  overflow: hidden;
+}
+
 .modal__header {
   display: flex;
   align-items: center;

@@ -82,10 +82,35 @@ let filterType = "all";
 let searchQ = "";
 /** @type {string | null} */
 let selectedId = null;
-/** @type {string | null} */
-let selectedIdBeforeCreate = null;
-/** @type {"empty" | "view" | "create"} */
+/** @type {"empty" | "view"} */
 let viewerMode = "empty";
+
+function isCreateModalOpen() {
+  const m = document.getElementById("modal-create-poliza");
+  return !!(m && !m.hidden);
+}
+
+function openCreateModal() {
+  const backdrop = document.getElementById("modal-create-poliza");
+  if (!backdrop) return;
+  backdrop.hidden = false;
+  backdrop.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-poliza-open");
+  const today = new Date().toISOString().slice(0, 10);
+  const d = document.getElementById("create-date");
+  if (d) d.value = today;
+  requestAnimationFrame(() => {
+    document.querySelector("#modal-create-poliza .modal--poliza")?.focus();
+  });
+}
+
+function closeCreateModal() {
+  const backdrop = document.getElementById("modal-create-poliza");
+  if (!backdrop) return;
+  backdrop.hidden = true;
+  backdrop.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-poliza-open");
+}
 
 const createLines = [];
 
@@ -230,64 +255,6 @@ function renderViewer() {
     return;
   }
 
-  if (viewerMode === "create") {
-    root.innerHTML = `
-      <div class="poliza-create">
-        <div class="poliza-toolbar">
-          <button type="button" class="poliza-toolbtn" disabled title="Próximamente"><span class="material-symbols-outlined">print</span></button>
-          <span class="poliza-toolbar__spacer"></span>
-          <button type="button" class="btn btn--text" id="btn-cancel-create">Cancelar</button>
-          <button type="button" class="btn btn--primary" id="btn-save-poliza">Guardar póliza</button>
-        </div>
-        <div class="poliza-meta">
-          <div>
-            <span class="poliza-meta__label">Tipo</span>
-            <select id="create-type" class="field__input">
-              <option value="DIARIO">Diario</option>
-              <option value="INGRESOS">Ingresos</option>
-              <option value="EGRESOS">Egresos</option>
-            </select>
-          </div>
-          <div>
-            <span class="poliza-meta__label">Fecha</span>
-            <input type="date" class="field__input" id="create-date" readonly value="${new Date().toISOString().slice(0, 10)}" />
-          </div>
-          <div class="poliza-meta__field--concept">
-            <span class="poliza-meta__label">Concepto general</span>
-            <input id="create-concept" class="field__input" type="text" placeholder="Descripción del asiento" />
-          </div>
-        </div>
-        <p class="modal__hint" style="margin:0 0 0.35rem;font-size:0.8125rem">Un renglón por ticket de venta; líneas de resumen (ventas/IVA) sin ticket. Debe = haber.</p>
-        <p class="poliza-mock-hint">Plantilla con tickets del día (demo); edita enlaces de factura y moneda antes de guardar.</p>
-        <div class="poliza-lines-wrap">
-          <table class="poliza-lines-table">
-            <thead>
-              <tr>
-                <th>Ticket</th>
-                <th>No. cuenta</th>
-                <th>Nombre</th>
-                <th>Factura</th>
-                <th>Concepto mov.</th>
-                <th>Moneda</th>
-                <th class="num">Debe</th>
-                <th class="num">Haber</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="create-lines-tbody"></tbody>
-          </table>
-        </div>
-        <button type="button" class="btn btn--text btn--sm" id="btn-add-line">
-          <span class="material-symbols-outlined btn__icon">add</span>
-          Añadir línea
-        </button>
-        <div class="totals-bar" id="create-totals"></div>
-      </div>`;
-    renderCreateLinesTable();
-    updateCreateTotalsBar();
-    return;
-  }
-
   const p = polizas.find((x) => x.id === selectedId);
   if (!p) {
     viewerMode = "empty";
@@ -422,19 +389,17 @@ function renderCreateLinesTable() {
 }
 
 function openCreate() {
-  selectedIdBeforeCreate = selectedId;
-  selectedId = null;
-  viewerMode = "create";
   const tpl = getMockNewPolizaTemplate();
   createLines.length = 0;
   tpl.lines.forEach((line) => createLines.push({ ...line }));
-  renderTable();
-  renderViewer();
+  renderCreateLinesTable();
+  updateCreateTotalsBar();
   const sel = $("#create-type");
   if (sel) sel.value = tpl.type;
   const conc = $("#create-concept");
   if (conc) conc.value = tpl.concept;
   showAlert("");
+  openCreateModal();
 }
 
 function selectPoliza(id) {
@@ -490,56 +455,46 @@ function wireUi() {
   $("#btn-new-poliza").addEventListener("click", () => openCreate());
 
   $("#poliza-viewer-root").addEventListener("click", (e) => {
-    if (e.target.closest("#btn-cancel-create")) {
-      if (selectedIdBeforeCreate && polizas.some((p) => p.id === selectedIdBeforeCreate)) {
-        selectedId = selectedIdBeforeCreate;
-        viewerMode = "view";
-      } else {
-        selectedId = null;
-        viewerMode = "empty";
-      }
-      selectedIdBeforeCreate = null;
-      renderTable();
-      renderViewer();
-      return;
-    }
-    if (e.target.closest("#btn-save-poliza")) {
-      void savePoliza();
-      return;
-    }
     if (e.target.closest("#btn-new-from-view")) {
       openCreate();
       return;
     }
-    if (e.target.closest("#btn-add-line")) {
-      if (viewerMode !== "create") return;
-      createLines.push({
-        ticketId: "",
-        accountCode: "",
-        accountName: "",
-        lineConcept: "",
-        invoiceUrl: "",
-        fxCurrency: "MX",
-        debit: 0,
-        credit: 0,
-      });
-      renderCreateLinesTable();
-      updateCreateTotalsBar();
-      return;
-    }
-    const rm = e.target.closest("[data-remove-line]");
-    if (rm) {
-      if (viewerMode !== "create") return;
-      const i = Number(rm.getAttribute("data-remove-line"));
-      createLines.splice(i, 1);
-      renderCreateLinesTable();
-      updateCreateTotalsBar();
-    }
   });
 
-  $("#poliza-viewer-root").addEventListener("input", (e) => {
+  document.getElementById("btn-cancel-create")?.addEventListener("click", () => closeCreateModal());
+
+  document.getElementById("btn-save-poliza")?.addEventListener("click", () => void savePoliza());
+
+  document.getElementById("btn-add-line")?.addEventListener("click", () => {
+    if (!isCreateModalOpen()) return;
+    createLines.push({
+      ticketId: "",
+      accountCode: "",
+      accountName: "",
+      lineConcept: "",
+      invoiceUrl: "",
+      fxCurrency: "MX",
+      debit: 0,
+      credit: 0,
+    });
+    renderCreateLinesTable();
+    updateCreateTotalsBar();
+  });
+
+  const modalRoot = document.getElementById("modal-create-poliza");
+  modalRoot?.addEventListener("click", (e) => {
+    if (e.target === modalRoot) closeCreateModal();
+    const rm = e.target.closest("[data-remove-line]");
+    if (!rm || !isCreateModalOpen()) return;
+    const i = Number(rm.getAttribute("data-remove-line"));
+    createLines.splice(i, 1);
+    renderCreateLinesTable();
+    updateCreateTotalsBar();
+  });
+
+  document.getElementById("modal-create-poliza")?.addEventListener("input", (e) => {
     const row = e.target.closest("tr[data-idx]");
-    if (!row || viewerMode !== "create") return;
+    if (!row || !isCreateModalOpen()) return;
     const idx = Number(row.getAttribute("data-idx"));
     const field = e.target.getAttribute("data-field");
     if (!field || !createLines[idx]) return;
@@ -552,16 +507,21 @@ function wireUi() {
     updateCreateTotalsBar();
   });
 
-  $("#poliza-viewer-root").addEventListener("change", (e) => {
+  document.getElementById("modal-create-poliza")?.addEventListener("change", (e) => {
     const t = e.target;
     const row = t.closest("tr[data-idx]");
-    if (!row || viewerMode !== "create") return;
+    if (!row || !isCreateModalOpen()) return;
     const idx = Number(row.getAttribute("data-idx"));
     const field = t.getAttribute("data-field");
     if (field === "fxCurrency" && createLines[idx]) {
       createLines[idx].fxCurrency = t.value;
       updateCreateTotalsBar();
     }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (isCreateModalOpen()) closeCreateModal();
   });
 
   $("#btn-logout").addEventListener("click", async () => {
@@ -617,9 +577,9 @@ async function savePoliza() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || "No se pudo guardar");
     polizas = [json.data, ...polizas];
-    selectedIdBeforeCreate = null;
     selectedId = json.data.id;
     viewerMode = "view";
+    closeCreateModal();
     renderTable();
     renderViewer();
     showAlert("Póliza guardada (persistencia cifrada en disco).", "success");

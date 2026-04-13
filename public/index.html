@@ -156,6 +156,73 @@
     </main>
   </div>
 
+  <!-- Modal: nueva póliza (ancho — el panel lateral queda solo para lectura) -->
+  <div class="modal-backdrop" id="modal-create-poliza" hidden aria-hidden="true">
+    <div
+      class="modal modal--poliza"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-create-poliza-title"
+      tabindex="-1"
+    >
+      <div class="modal__header modal__header--poliza">
+        <h2 class="modal__title" id="modal-create-poliza-title">Nueva póliza</h2>
+        <div class="modal__header-actions">
+          <button type="button" class="poliza-toolbtn" disabled title="Próximamente" aria-hidden="true">
+            <span class="material-symbols-outlined">print</span>
+          </button>
+          <button type="button" class="btn btn--text" id="btn-cancel-create">Cancelar</button>
+          <button type="button" class="btn btn--primary" id="btn-save-poliza">Guardar póliza</button>
+        </div>
+      </div>
+      <div class="modal__body modal__body--poliza">
+        <div class="poliza-meta poliza-meta--modal">
+          <div>
+            <span class="poliza-meta__label">Tipo</span>
+            <select id="create-type" class="field__input">
+              <option value="DIARIO">Diario</option>
+              <option value="INGRESOS">Ingresos</option>
+              <option value="EGRESOS">Egresos</option>
+            </select>
+          </div>
+          <div>
+            <span class="poliza-meta__label">Fecha</span>
+            <input type="date" class="field__input" id="create-date" readonly />
+          </div>
+          <div class="poliza-meta__field--concept">
+            <span class="poliza-meta__label">Concepto general</span>
+            <input id="create-concept" class="field__input" type="text" placeholder="Descripción del asiento" />
+          </div>
+        </div>
+        <p class="modal__hint modal__hint--poliza">Un renglón por ticket de venta; líneas de resumen (ventas/IVA) sin ticket. Debe = haber.</p>
+        <p class="poliza-mock-hint">Plantilla con tickets del día (demo); edita enlaces de factura y moneda antes de guardar.</p>
+        <div class="poliza-lines-wrap poliza-lines-wrap--modal">
+          <table class="poliza-lines-table poliza-lines-table--modal">
+            <thead>
+              <tr>
+                <th>Ticket</th>
+                <th>No. cuenta</th>
+                <th>Nombre</th>
+                <th>Factura</th>
+                <th>Concepto mov.</th>
+                <th>Moneda</th>
+                <th class="num">Debe</th>
+                <th class="num">Haber</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="create-lines-tbody"></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn--text btn--sm" id="btn-add-line">
+          <span class="material-symbols-outlined btn__icon" aria-hidden="true">add</span>
+          Añadir línea
+        </button>
+        <div class="totals-bar" id="create-totals"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js" type="module"></script>
 </body>
 </html>
