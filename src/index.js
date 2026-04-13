@@ -76,17 +76,20 @@ app.post("/api/polizas", requireAuth, (req, res) => {
     });
   }
   const id = `pol-${Date.now()}`;
-  const normLine = (l) => ({
-    accountCode: String(l.accountCode || "").trim(),
-    accountName: String(l.accountName || "").trim(),
-    debit: Number(l.debit) || 0,
-    credit: Number(l.credit) || 0,
-    depto: l.depto != null && String(l.depto).trim() !== "" ? String(l.depto).trim() : "0",
-    centro: l.centro != null && String(l.centro).trim() !== "" ? String(l.centro).trim() : "0",
-    proyecto: l.proyecto != null && String(l.proyecto).trim() !== "" ? String(l.proyecto).trim() : "0",
-    lineConcept: String(l.lineConcept || "").trim(),
-    exchangeRate: Number(l.exchangeRate) > 0 ? Number(l.exchangeRate) : 1,
-  });
+  const normLine = (l) => {
+    const fx = String(l.fxCurrency || "MX").toUpperCase();
+    const fxCurrency = ["MX", "USD", "CAD", "EUR"].includes(fx) ? fx : "MX";
+    return {
+      ticketId: String(l.ticketId || "").trim(),
+      accountCode: String(l.accountCode || "").trim(),
+      accountName: String(l.accountName || "").trim(),
+      debit: Number(l.debit) || 0,
+      credit: Number(l.credit) || 0,
+      lineConcept: String(l.lineConcept || "").trim(),
+      invoiceUrl: String(l.invoiceUrl || "").trim(),
+      fxCurrency,
+    };
+  };
 
   const row = {
     id,

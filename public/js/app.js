@@ -19,9 +19,30 @@ function formatMoney(n) {
   }).format(Number(n) || 0);
 }
 
-function formatExchange(n) {
-  const x = Number(n) > 0 ? Number(n) : 1;
-  return "$" + x.toFixed(2);
+const FX_OPTIONS = [
+  { value: "MX", label: "MX (MXN)" },
+  { value: "USD", label: "USD" },
+  { value: "CAD", label: "CAD" },
+  { value: "EUR", label: "EUR" },
+];
+
+function fxLabel(code) {
+  const m = { MX: "MX (MXN)", USD: "USD", CAD: "CAD", EUR: "EUR" };
+  return m[code] || m.MX;
+}
+
+/** @param {string} url */
+function invoiceLinkHtml(url) {
+  const u = String(url || "").trim();
+  if (!u) return `<span class="poliza-cell--empty">—</span>`;
+  if (!/^https?:\/\//i.test(u)) return escapeHtml(u);
+  return `<a href="${escapeAttr(u)}" class="poliza-invoice-link" target="_blank" rel="noopener noreferrer">Descargar factura</a>`;
+}
+
+function fxSelectOptions(selected) {
+  return FX_OPTIONS.map(
+    (o) => `<option value="${o.value}" ${selected === o.value ? "selected" : ""}>${o.label}</option>`
+  ).join("");
 }
 
 function lineTotals(lines) {
@@ -42,16 +63,17 @@ function folioSeq(folio) {
 }
 
 function normLine(l) {
+  const fx = String(l.fxCurrency || l.currency || "MX").toUpperCase();
+  const fxCurrency = ["MX", "USD", "CAD", "EUR"].includes(fx) ? fx : "MX";
   return {
+    ticketId: String(l.ticketId || "").trim(),
     accountCode: l.accountCode || "",
     accountName: l.accountName || "",
     debit: Number(l.debit) || 0,
     credit: Number(l.credit) || 0,
-    depto: l.depto != null && l.depto !== "" ? String(l.depto) : "0",
-    centro: l.centro != null && l.centro !== "" ? String(l.centro) : "0",
-    proyecto: l.proyecto != null && l.proyecto !== "" ? String(l.proyecto) : "0",
     lineConcept: l.lineConcept || "",
-    exchangeRate: Number(l.exchangeRate) > 0 ? Number(l.exchangeRate) : 1,
+    invoiceUrl: String(l.invoiceUrl || "").trim(),
+    fxCurrency,
   };
 }
 
@@ -67,43 +89,59 @@ let viewerMode = "empty";
 
 const createLines = [];
 
-/** Datos de demostración al abrir «Nueva póliza» (no se guardan hasta pulsar Guardar). */
+/** Datos de demostración: tickets del día + líneas de resumen (demo; no se guarda hasta Guardar). */
 function getMockNewPolizaTemplate() {
   return {
     type: "INGRESOS",
-    concept:
-      "Venta F-FACT 34 — consumo mostrador 39A39FB5-BF11-45AA-8B27-D7E0E29E1F8A (demo prellenado)",
+    concept: "Cierre ventas del día — tickets POS (demo)",
     lines: [
       {
+        ticketId: "T-0411-0082",
         accountCode: "105.01",
         accountName: "Caja general",
-        depto: "0",
-        centro: "0",
-        proyecto: "0",
-        lineConcept: "Cobro efectivo ticket mostrador",
-        exchangeRate: 1,
-        debit: 1160,
+        lineConcept: "Venta ticket mostrador",
+        invoiceUrl: "https://example.com/cfdi/ticket-0082.xml",
+        fxCurrency: "MX",
+        debit: 450,
         credit: 0,
       },
       {
+        ticketId: "T-0411-0083",
+        accountCode: "105.01",
+        accountName: "Caja general",
+        lineConcept: "Venta ticket (pendiente factura)",
+        invoiceUrl: "",
+        fxCurrency: "MX",
+        debit: 320,
+        credit: 0,
+      },
+      {
+        ticketId: "T-0411-0084",
+        accountCode: "105.01",
+        accountName: "Caja general",
+        lineConcept: "Venta ticket",
+        invoiceUrl: "https://example.com/cfdi/ticket-0084.pdf",
+        fxCurrency: "USD",
+        debit: 390,
+        credit: 0,
+      },
+      {
+        ticketId: "",
         accountCode: "401.01",
-        accountName: "Ventas y/o servicios nacionales",
-        depto: "0",
-        centro: "0",
-        proyecto: "0",
-        lineConcept: "Consumo alimentos clave 90101500",
-        exchangeRate: 1,
+        accountName: "Ventas nacionales",
+        lineConcept: "Consolidado ventas",
+        invoiceUrl: "",
+        fxCurrency: "MX",
         debit: 0,
         credit: 1000,
       },
       {
+        ticketId: "",
         accountCode: "208.01",
         accountName: "IVA trasladado cobrado",
-        depto: "0",
-        centro: "0",
-        proyecto: "0",
         lineConcept: "IVA 16 %",
-        exchangeRate: 1,
+        invoiceUrl: "",
+        fxCurrency: "MX",
         debit: 0,
         credit: 160,
       },
@@ -131,7 +169,9 @@ function matches(p) {
     p.type,
     p.date,
     sourceLabel(p.sourceRef),
-    ...(p.lines || []).map((l) => `${l.accountCode} ${l.accountName} ${l.lineConcept || ""}`),
+    ...(p.lines || []).map((l) =>
+      `${l.ticketId || ""} ${l.accountCode} ${l.accountName} ${l.lineConcept || ""} ${l.invoiceUrl || ""}`.trim()
+    ),
   ]
     .join(" ")
     .toLowerCase();
@@ -185,7 +225,7 @@ function renderViewer() {
         <span class="material-symbols-outlined viewer-empty__icon" aria-hidden="true">receipt_long</span>
         <p class="viewer-empty__title">Visualizador de pólizas</p>
         <p class="viewer-empty__text">Selecciona un renglón en el listado o usa <strong>Nueva póliza</strong> para capturar un asiento.</p>
-        <p class="viewer-empty__hint">Las pólizas alimentadas por operación (tablet / ventas) se generarán o actualizarán mediante un proceso al <strong>finalizar cada día</strong>, leyendo la base de datos corporativa.</p>
+        <p class="viewer-empty__hint">Cada <strong>renglón</strong> corresponde a un <strong>ticket de venta</strong> del día; si el ticket está facturado, verás el enlace de descarga del CFDI/PDF. El cierre diario llenará esta póliza desde la base de datos.</p>
       </div>`;
     return;
   }
@@ -217,19 +257,18 @@ function renderViewer() {
             <input id="create-concept" class="field__input" type="text" placeholder="Descripción del asiento" />
           </div>
         </div>
-        <p class="modal__hint" style="margin:0 0 0.35rem;font-size:0.8125rem">Movimientos: solo cargo o abono por línea. Suma de cargos = suma de abonos.</p>
-        <p class="poliza-mock-hint">Plantilla de ejemplo (venta + IVA); puedes editar antes de guardar.</p>
+        <p class="modal__hint" style="margin:0 0 0.35rem;font-size:0.8125rem">Un renglón por ticket de venta; líneas de resumen (ventas/IVA) sin ticket. Debe = haber.</p>
+        <p class="poliza-mock-hint">Plantilla con tickets del día (demo); edita enlaces de factura y moneda antes de guardar.</p>
         <div class="poliza-lines-wrap">
           <table class="poliza-lines-table">
             <thead>
               <tr>
+                <th>Ticket</th>
                 <th>No. cuenta</th>
                 <th>Nombre</th>
-                <th>Depto</th>
-                <th>Ctro</th>
-                <th>Proy.</th>
+                <th>Factura</th>
                 <th>Concepto mov.</th>
-                <th>T. cambio</th>
+                <th>Moneda</th>
                 <th class="num">Debe</th>
                 <th class="num">Haber</th>
                 <th></th>
@@ -264,13 +303,12 @@ function renderViewer() {
     .map(
       (l) => `
     <tr>
+      <td>${l.ticketId ? escapeHtml(l.ticketId) : "—"}</td>
       <td>${escapeHtml(l.accountCode)}</td>
       <td>${escapeHtml(l.accountName)}</td>
-      <td>${escapeHtml(l.depto)}</td>
-      <td>${escapeHtml(l.centro)}</td>
-      <td>${escapeHtml(l.proyecto)}</td>
+      <td class="poliza-cell-factura">${invoiceLinkHtml(l.invoiceUrl)}</td>
       <td>${escapeHtml(l.lineConcept || "—")}</td>
-      <td class="num">${formatExchange(l.exchangeRate)}</td>
+      <td>${escapeHtml(fxLabel(l.fxCurrency))}</td>
       <td class="num">${l.debit ? formatMoney(l.debit) : "—"}</td>
       <td class="num">${l.credit ? formatMoney(l.credit) : "—"}</td>
     </tr>`
@@ -315,13 +353,12 @@ function renderViewer() {
         <table class="poliza-lines-table">
           <thead>
             <tr>
+              <th>Ticket</th>
               <th>No. cuenta</th>
               <th>Nombre</th>
-              <th>Depto</th>
-              <th>Ctro</th>
-              <th>Proy.</th>
+              <th>Factura</th>
               <th>Concepto mov.</th>
-              <th>T. cambio</th>
+              <th>Moneda</th>
               <th class="num">Debe</th>
               <th class="num">Haber</th>
             </tr>
@@ -329,7 +366,7 @@ function renderViewer() {
           <tbody>
             ${rowsHtml}
             <tr class="poliza-lines-table--totals">
-              <td colspan="7">Totales</td>
+              <td colspan="6">Totales</td>
               <td class="num">${formatMoney(debit)}</td>
               <td class="num">${formatMoney(credit)}</td>
             </tr>
@@ -338,7 +375,7 @@ function renderViewer() {
       </div>
       <div class="poliza-footer">
         <span>No. de partidas: <strong>${nPart}</strong></span>
-        <span>Moneda: <strong>MXN</strong></span>
+        <span>Moneda: <strong>por línea</strong> (MX / USD / CAD / EUR)</span>
         <span>${balanced ? "Estado: <strong>Cuadra</strong>" : "Estado: <strong>Revisar cuadre</strong>"}</span>
       </div>
       <p class="poliza-sync-badge">${escapeHtml(syncNote)} · Origen listado: ${escapeHtml(sourceLabel(p.sourceRef))}</p>
@@ -361,20 +398,21 @@ function renderCreateLinesTable() {
   const tbody = $("#create-lines-tbody");
   if (!tbody) return;
   if (!createLines.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="data-table__empty">Añade líneas.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="data-table__empty">Añade líneas.</td></tr>`;
     return;
   }
   tbody.innerHTML = createLines
     .map(
       (line, i) => `
     <tr data-idx="${i}">
+      <td><input class="line-input" type="text" data-field="ticketId" placeholder="T-…" value="${escapeAttr(line.ticketId)}" /></td>
       <td><input class="line-input" type="text" data-field="accountCode" value="${escapeAttr(line.accountCode)}" /></td>
       <td><input class="line-input" type="text" data-field="accountName" value="${escapeAttr(line.accountName)}" /></td>
-      <td><input class="line-input" type="text" data-field="depto" value="${escapeAttr(line.depto)}" /></td>
-      <td><input class="line-input" type="text" data-field="centro" value="${escapeAttr(line.centro)}" /></td>
-      <td><input class="line-input" type="text" data-field="proyecto" value="${escapeAttr(line.proyecto)}" /></td>
+      <td><input class="line-input" type="url" data-field="invoiceUrl" placeholder="https://… CFDI/PDF" value="${escapeAttr(line.invoiceUrl)}" /></td>
       <td><input class="line-input" type="text" data-field="lineConcept" value="${escapeAttr(line.lineConcept)}" /></td>
-      <td><input class="line-input line-input--num" type="number" step="0.01" min="0" data-field="exchangeRate" value="${line.exchangeRate !== 1 ? line.exchangeRate : ""}" placeholder="1" /></td>
+      <td>
+        <select class="line-input line-input--select" data-field="fxCurrency">${fxSelectOptions(line.fxCurrency || "MX")}</select>
+      </td>
       <td class="num"><input class="line-input line-input--num" type="number" step="0.01" min="0" data-field="debit" value="${line.debit || ""}" /></td>
       <td class="num"><input class="line-input line-input--num" type="number" step="0.01" min="0" data-field="credit" value="${line.credit || ""}" /></td>
       <td><button type="button" class="btn btn--ghost btn--sm" data-remove-line="${i}">✕</button></td>
@@ -476,13 +514,12 @@ function wireUi() {
     if (e.target.closest("#btn-add-line")) {
       if (viewerMode !== "create") return;
       createLines.push({
+        ticketId: "",
         accountCode: "",
         accountName: "",
-        depto: "0",
-        centro: "0",
-        proyecto: "0",
         lineConcept: "",
-        exchangeRate: 1,
+        invoiceUrl: "",
+        fxCurrency: "MX",
         debit: 0,
         credit: 0,
       });
@@ -507,12 +544,24 @@ function wireUi() {
     const field = e.target.getAttribute("data-field");
     if (!field || !createLines[idx]) return;
     const val = e.target.value;
-    if (["debit", "credit", "exchangeRate"].includes(field)) {
-      createLines[idx][field] = val === "" ? (field === "exchangeRate" ? 1 : 0) : Number(val);
+    if (field === "debit" || field === "credit") {
+      createLines[idx][field] = val === "" ? 0 : Number(val);
     } else {
       createLines[idx][field] = val;
     }
     updateCreateTotalsBar();
+  });
+
+  $("#poliza-viewer-root").addEventListener("change", (e) => {
+    const t = e.target;
+    const row = t.closest("tr[data-idx]");
+    if (!row || viewerMode !== "create") return;
+    const idx = Number(row.getAttribute("data-idx"));
+    const field = t.getAttribute("data-field");
+    if (field === "fxCurrency" && createLines[idx]) {
+      createLines[idx].fxCurrency = t.value;
+      updateCreateTotalsBar();
+    }
   });
 
   $("#btn-logout").addEventListener("click", async () => {
@@ -529,19 +578,22 @@ async function savePoliza() {
   const type = $("#create-type")?.value || "DIARIO";
   const concept = $("#create-concept")?.value?.trim() || "";
   const lines = createLines.map((l) => ({
+    ticketId: String(l.ticketId || "").trim(),
     accountCode: l.accountCode.trim(),
     accountName: l.accountName.trim(),
     debit: Number(l.debit) || 0,
     credit: Number(l.credit) || 0,
-    depto: String(l.depto ?? "0").trim() || "0",
-    centro: String(l.centro ?? "0").trim() || "0",
-    proyecto: String(l.proyecto ?? "0").trim() || "0",
     lineConcept: String(l.lineConcept || "").trim(),
-    exchangeRate: Number(l.exchangeRate) > 0 ? Number(l.exchangeRate) : 1,
+    invoiceUrl: String(l.invoiceUrl || "").trim(),
+    fxCurrency: ["MX", "USD", "CAD", "EUR"].includes(String(l.fxCurrency || "MX").toUpperCase())
+      ? String(l.fxCurrency).toUpperCase()
+      : "MX",
   }));
-  const validLines = lines.filter((l) => l.accountCode && (l.debit > 0 || l.credit > 0));
+  const validLines = lines.filter(
+    (l) => (l.ticketId || l.accountCode) && (l.debit > 0 || l.credit > 0)
+  );
   if (validLines.length < 2) {
-    showAlert("Completa al menos dos líneas con cuenta y debe o haber.");
+    showAlert("Completa al menos dos líneas con ticket o cuenta y debe o haber.");
     return;
   }
   if (!concept) {

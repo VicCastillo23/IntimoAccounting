@@ -21,7 +21,7 @@ Aplicación web para **pólizas contables** (asientos con movimientos dinámicos
    npm run gen:session-secret # SESSION_SECRET
    ```
 
-3. **Pólizas y cierre diario:** la pantalla de pólizas está preparada para un **job nocturno** (cron / EventBridge) que, al finalizar el día operativo, lea la base de datos alineada con la tablet y ventas para insertar o actualizar asientos. Eso se implementará contra PostgreSQL u otro motor; el modelo de líneas ya incluye dimensiones (depto / centro / proyecto) y concepto por movimiento.
+3. **Pólizas y cierre diario:** la pantalla está preparada para un **job al cierre del día** que lea ventas/tickets desde la base de datos (tablet / POS): **un renglón por ticket**, enlace opcional a **descarga de factura** (CFDI/PDF) y **moneda** por línea (MX, USD, CAD, EUR). Persistencia futura en PostgreSQL u otro motor.
 
 4. **Primera ejecución:** si no existen `data/users.enc` ni `data/polizas.enc`, el servidor crea:
 
