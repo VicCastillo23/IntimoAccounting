@@ -60,6 +60,19 @@ Abre [http://localhost:3010](http://localhost:3010). Sin sesión, se redirige a 
 - `GET /api/polizas`, `POST /api/polizas`
 - `GET /health` — comprobación mínima (sin datos sensibles)
 
+## PostgreSQL (opcional, mismo RDS que Loyalty)
+
+En este repositorio, `deploy/postgres/` define esquemas **`pos`**, **`invoicing`** y **`accounting`** sobre la misma base que ya usa el servidor de loyalty. Ejecuta los `.sql` en orden (ver ese README).
+
+Si defines **`DATABASE_URL`** en `.env`:
+
+- `GET /health` incluye el estado de conexión y `persistence: "postgresql"`.
+- Las pólizas se guardan en **`accounting.polizas`** / **`accounting.poliza_lines`** (ejecuta también **`deploy/postgres/05_accounting_folio_counter.sql`** en el servidor).
+
+Sin `DATABASE_URL`, el modo sigue siendo **`data/polizas.enc`** cifrado (`persistence: "file"` en `/health`).
+
+**Systemd:** el proceso carga `.env` desde la **raíz del proyecto** (`loadEnv.js`), no desde `process.cwd`. Aun así conviene en la unidad: `WorkingDirectory=/ruta/a/IntimoAccounting` y opcionalmente `EnvironmentFile=.../.env`.
+
 ## Vista previa en el servidor (aún no productivo)
 
 Para que en **AWS** se comporte **como en local** (mismo flujo, `admin` / `admin` si no creaste usuario, cookies sin `Secure` forzado):

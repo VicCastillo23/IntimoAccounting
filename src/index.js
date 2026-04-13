@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./loadEnv.js";
 import express from "express";
 import helmet from "helmet";
 import session from "express-session";
@@ -12,10 +12,10 @@ import { initUsersStore } from "./auth/usersStore.js";
 import {
   initPolizasStore,
   getPolizas,
-  addPoliza,
-  nextFolio,
+  saveNewPoliza,
   peekNextFolio,
 } from "./store/polizasStore.js";
+import { checkDb } from "./db/pool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
@@ -39,7 +39,6 @@ app.use(
 
 const dataKey = parseKeyHex(process.env.DATA_ENCRYPTION_KEY);
 initUsersStore(dataKey);
-initPolizasStore(dataKey);
 
 app.use(getSessionMiddleware(session));
 app.use(express.json({ limit: "512kb" }));
@@ -50,11 +49,14 @@ function totals(lines) {
   return { debit, credit, balanced: Math.abs(debit - credit) < 0.005 };
 }
 
-app.get("/health", (_req, res) => {
+app.get("/health", async (_req, res) => {
+  const database = await checkDb();
   res.json({
     ok: true,
     service: "intimo-accounting",
     env: process.env.NODE_ENV || "development",
+    persistence: process.env.DATABASE_URL?.trim() ? "postgresql" : "file",
+    database,
   });
 });
 
@@ -73,11 +75,19 @@ app.get("/api/polizas", requireAuth, (_req, res) => {
   res.json({ success: true, data: getPolizas() });
 });
 
-app.get("/api/polizas/next-folio", requireAuth, (_req, res) => {
-  res.json({ success: true, folio: peekNextFolio() });
+app.get("/api/polizas/next-folio", requireAuth, async (_req, res) => {
+  try {
+    const folio = await peekNextFolio();
+    res.json({ success: true, folio });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al obtener folio",
+    });
+  }
 });
 
-app.post("/api/polizas", requireAuth, (req, res) => {
+app.post("/api/polizas", requireAuth, async (req, res) => {
   const { type, concept, lines } = req.body || {};
   if (!type || !concept || !Array.isArray(lines) || lines.length < 2) {
     return res.status(400).json({
@@ -92,7 +102,6 @@ app.post("/api/polizas", requireAuth, (req, res) => {
       message: "La póliza debe cuadrar: suma cargos = suma abonos.",
     });
   }
-  const id = `pol-${Date.now()}`;
   const normLine = (l) => {
     const fx = String(l.fxCurrency || "MX").toUpperCase();
     const fxCurrency = ["MX", "USD", "CAD", "EUR"].includes(fx) ? fx : "MX";
@@ -109,18 +118,18 @@ app.post("/api/polizas", requireAuth, (req, res) => {
     };
   };
 
-  const row = {
-    id,
-    folio: nextFolio(),
-    date: new Date().toISOString().slice(0, 10),
-    type: String(type).toUpperCase(),
-    concept: String(concept).trim(),
-    sourceRef: { kind: "manual", label: null, tabletSync: false },
-    accountingBatchDate: null,
-    lines: lines.map(normLine),
-  };
-  addPoliza(row);
-  res.status(201).json({ success: true, data: row });
+  try {
+    const row = await saveNewPoliza({
+      type: String(type).toUpperCase(),
+      concept: String(concept).trim(),
+      lines: lines.map(normLine),
+    });
+    res.status(201).json({ success: true, data: row });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "No se pudo guardar la póliza";
+    const code = /unique|duplicate|violates/i.test(msg) ? 409 : 500;
+    res.status(code).json({ success: false, message: msg });
+  }
 });
 
 app.get("/login.html", (_req, res) => {
@@ -152,6 +161,14 @@ app.use(
 
 app.get("/", sendAppIfAuthed);
 
-app.listen(port, "0.0.0.0", () => {
-  console.log(`intimo-accounting http://localhost:${port}`);
+async function main() {
+  await initPolizasStore(dataKey);
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`intimo-accounting http://localhost:${port}`);
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });

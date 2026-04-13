@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { initialPolizas } from "../mock/polizas.js";
 import { decryptJson, encryptJson } from "../crypto/vault.js";
+import { getPool } from "../db/pool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "..", "data");
@@ -15,9 +16,13 @@ const REMOVED_POLIZA_FOLIOS = new Set(["P-2026-0001", "P-2026-0002", "P-2026-000
 /** @type {Buffer} */
 let _key;
 
-/** @type {typeof initialPolizas} */
+/** @type {Array<Record<string, unknown>>} */
 let polizas = [];
 let seq = 1;
+
+function usePg() {
+  return getPool() !== null;
+}
 
 function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { mode: 0o700 });
@@ -30,23 +35,121 @@ function loadFromDisk() {
   seq = typeof data.seq === "number" ? data.seq : polizas.length + 1;
 }
 
-function persist() {
+function persistFile() {
   ensureDir();
   const payload = encryptJson({ polizas, seq }, _key);
   fs.writeFileSync(POLIZAS_FILE, payload + "\n", { mode: 0o600 });
 }
 
+function maxFolioNumeric(folios) {
+  let m = 0;
+  for (const f of folios) {
+    const match = /^P-\d{4}-(\d+)$/.exec(String(f));
+    if (match) m = Math.max(m, parseInt(match[1], 10));
+  }
+  return m;
+}
+
+/**
+ * Asegura que el contador en BD sea >= max(folios)+1.
+ * @param {import("pg").PoolClient} client
+ */
+async function alignFolioCounter(client, folioStrings) {
+  const maxN = maxFolioNumeric(folioStrings);
+  await client.query(
+    `UPDATE accounting.folio_counter
+     SET next_seq = GREATEST(next_seq, $1)
+     WHERE singleton = 1`,
+    [maxN + 1]
+  );
+}
+
+async function loadFromPg() {
+  const pool = getPool();
+  if (!pool) throw new Error("Pool PostgreSQL no disponible");
+
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `INSERT INTO accounting.folio_counter (singleton, next_seq) VALUES (1, 1)
+       ON CONFLICT (singleton) DO NOTHING`
+    );
+
+    const { rows: pRows } = await client.query(`
+      SELECT id, folio, poliza_date::text AS d, type, concept, source_ref, accounting_batch_date::text AS abd
+      FROM accounting.polizas
+      ORDER BY poliza_date DESC, created_at DESC
+    `);
+
+    if (pRows.length === 0) {
+      polizas = [];
+      return;
+    }
+
+    const ids = pRows.map((r) => r.id);
+    const { rows: lRows } = await client.query(
+      `
+      SELECT poliza_id, line_index, ticket_id, account_code, account_name, debit::float8, credit::float8,
+             line_concept, invoice_url, fx_currency, depto
+      FROM accounting.poliza_lines
+      WHERE poliza_id = ANY($1::varchar[])
+      ORDER BY poliza_id, line_index
+    `,
+      [ids]
+    );
+
+    const linesBy = new Map();
+    for (const l of lRows) {
+      if (!linesBy.has(l.poliza_id)) linesBy.set(l.poliza_id, []);
+      linesBy.get(l.poliza_id).push({
+        ticketId: l.ticket_id ?? "",
+        accountCode: l.account_code ?? "",
+        accountName: l.account_name ?? "",
+        debit: Number(l.debit) || 0,
+        credit: Number(l.credit) || 0,
+        lineConcept: l.line_concept ?? "",
+        invoiceUrl: l.invoice_url ?? "",
+        fxCurrency: l.fx_currency ?? "MX",
+        depto: l.depto ?? "ADMINISTRACION",
+      });
+    }
+
+    polizas = pRows.map((p) => ({
+      id: p.id,
+      folio: p.folio,
+      date: p.d,
+      type: p.type,
+      concept: p.concept,
+      sourceRef: p.source_ref && typeof p.source_ref === "object" ? p.source_ref : {},
+      accountingBatchDate: p.abd || null,
+      lines: linesBy.get(p.id) || [],
+    }));
+
+    await alignFolioCounter(
+      client,
+      polizas.map((p) => p.folio)
+    );
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * @param {Buffer} key32
  */
-export function initPolizasStore(key32) {
+export async function initPolizasStore(key32) {
   _key = key32;
   ensureDir();
+
+  if (usePg()) {
+    await loadFromPg();
+    return;
+  }
 
   if (!fs.existsSync(POLIZAS_FILE)) {
     polizas = structuredClone(initialPolizas);
     seq = polizas.length + 1;
-    persist();
+    persistFile();
     return;
   }
 
@@ -59,7 +162,7 @@ export function initPolizasStore(key32) {
         !REMOVED_POLIZA_FOLIOS.has(String(p.folio))
     );
     if (polizas.length !== n0) {
-      persist();
+      persistFile();
     }
   } catch (e) {
     throw new Error(
@@ -76,21 +179,115 @@ export function getSeqState() {
   return { seq, count: polizas.length };
 }
 
-/** Folio que se asignará al siguiente alta (no incrementa el contador). */
-export function peekNextFolio() {
+export async function peekNextFolio() {
   const y = new Date().getFullYear();
-  const n = String(seq).padStart(4, "0");
+  if (!usePg()) {
+    const n = String(seq).padStart(4, "0");
+    return `P-${y}-${n}`;
+  }
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT next_seq FROM accounting.folio_counter WHERE singleton = 1`
+  );
+  const nextSeq = rows[0]?.next_seq ?? 1;
+  const n = String(nextSeq).padStart(4, "0");
   return `P-${y}-${n}`;
 }
 
-export function nextFolio() {
-  const y = new Date().getFullYear();
-  const n = String(seq++).padStart(4, "0");
-  return `P-${y}-${n}`;
-}
+/**
+ * Crea una póliza nueva (archivo local o PostgreSQL).
+ * @param {{ type: string, concept: string, lines: Array<Record<string, unknown>> }} input
+ */
+export async function saveNewPoliza(input) {
+  const type = String(input.type || "").toUpperCase();
+  const concept = String(input.concept || "").trim();
+  const lines = input.lines || [];
+  const id = `pol-${Date.now()}`;
+  const date = new Date().toISOString().slice(0, 10);
+  const sourceRef = { kind: "manual", label: null, tabletSync: false };
 
-/** @param {Record<string, unknown>} row */
-export function addPoliza(row) {
-  polizas = [row, ...polizas];
-  persist();
+  if (!usePg()) {
+    const y = new Date().getFullYear();
+    const n = String(seq++).padStart(4, "0");
+    const folio = `P-${y}-${n}`;
+    const row = {
+      id,
+      folio,
+      date,
+      type,
+      concept,
+      sourceRef,
+      accountingBatchDate: null,
+      lines,
+    };
+    polizas = [row, ...polizas];
+    persistFile();
+    return row;
+  }
+
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows: cRows } = await client.query(
+      `SELECT next_seq FROM accounting.folio_counter WHERE singleton = 1 FOR UPDATE`
+    );
+    const nextSeq = cRows[0]?.next_seq ?? 1;
+    const y = new Date().getFullYear();
+    const folio = `P-${y}-${String(nextSeq).padStart(4, "0")}`;
+
+    await client.query(
+      `UPDATE accounting.folio_counter SET next_seq = next_seq + 1 WHERE singleton = 1`
+    );
+
+    await client.query(
+      `INSERT INTO accounting.polizas (id, folio, poliza_date, type, concept, source_ref, accounting_batch_date)
+       VALUES ($1, $2, $3::date, $4, $5, $6::jsonb, $7::date)`,
+      [id, folio, date, type, concept, sourceRef, null]
+    );
+
+    let idx = 0;
+    for (const l of lines) {
+      await client.query(
+        `INSERT INTO accounting.poliza_lines
+         (poliza_id, line_index, ticket_id, account_code, account_name, debit, credit, line_concept, invoice_url, fx_currency, depto)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          id,
+          idx,
+          String(l.ticketId || "").trim(),
+          String(l.accountCode || "").trim(),
+          String(l.accountName || "").trim(),
+          Number(l.debit) || 0,
+          Number(l.credit) || 0,
+          String(l.lineConcept || "").trim(),
+          String(l.invoiceUrl || "").trim(),
+          String(l.fxCurrency || "MX").toUpperCase(),
+          String(l.depto || "ADMINISTRACION").toUpperCase(),
+        ]
+      );
+      idx++;
+    }
+
+    await client.query("COMMIT");
+
+    const row = {
+      id,
+      folio,
+      date,
+      type,
+      concept,
+      sourceRef,
+      accountingBatchDate: null,
+      lines,
+    };
+    polizas = [row, ...polizas];
+    return row;
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
 }
