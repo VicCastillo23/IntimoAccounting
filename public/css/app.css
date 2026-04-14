@@ -1925,3 +1925,239 @@ select.field__input--select:disabled {
     width: min(100%, 100vw - 1.5rem);
   }
 }
+
+/* —— Reportería —— */
+.main--report {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 3rem;
+  width: 100%;
+}
+
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem 1.5rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.report-toolbar__dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--intimo-gray-medium);
+}
+
+.report-field__input {
+  min-height: 2.5rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--intimo-outline);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.report-toolbar__hint {
+  margin: 0;
+  flex: 1;
+  min-width: 12rem;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-light);
+}
+
+.report-alert-slot {
+  margin-bottom: 1rem;
+}
+
+.report-section {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.35rem 1.5rem;
+}
+
+.report-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-num--muted {
+  color: var(--intimo-gray-muted);
+  font-size: 0.875rem;
+}
+
+.report-total-row td {
+  background: var(--intimo-bg);
+  border-top: 2px solid var(--intimo-outline);
+}
+
+.report-esf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 1rem;
+}
+
+.report-esf-card {
+  padding: 1.1rem 1.2rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
+  border: 1px solid var(--intimo-outline);
+}
+
+.report-esf-card--wide {
+  grid-column: 1 / -1;
+}
+
+.report-esf-card__title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--intimo-gray-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.report-esf-card__amount {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-esf-card__foot {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-light);
+}
+
+.report-pl {
+  max-width: 36rem;
+}
+
+.report-pl-row {
+  margin-bottom: 1rem;
+}
+
+.report-pl-row__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.9375rem;
+}
+
+.report-pl-bar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--intimo-bg);
+  overflow: hidden;
+}
+
+.report-pl-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+  transition: width 0.35s ease;
+}
+
+.report-pl-bar__fill--in {
+  background: linear-gradient(90deg, #2e7d32, #66bb6a);
+}
+
+.report-pl-bar__fill--cost {
+  background: linear-gradient(90deg, #e65100, #ffb74d);
+}
+
+.report-pl-bar__fill--exp {
+  background: linear-gradient(90deg, #b71c1c, #e57373);
+}
+
+.report-pl-summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.65rem 0;
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--intimo-outline);
+  font-size: 0.9375rem;
+}
+
+.report-pl-summary--net {
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-top: 2px solid var(--intimo-black);
+  margin-top: 0.25rem;
+}
+
+.report-capital-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 32rem;
+}
+
+.report-capital-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--intimo-outline);
+  font-size: 0.9375rem;
+}
+
+.report-capital-list__note {
+  display: block;
+  padding-top: 0.75rem;
+  border: none;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-light);
+  line-height: 1.45;
+}
+
+.report-cf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+
+.report-cf-block {
+  padding: 1rem 1.15rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--intimo-outline);
+  background: var(--intimo-surface);
+}
+
+.report-cf-block--highlight {
+  background: linear-gradient(135deg, #e8f5e9 0%, #fff 100%);
+  border-color: #a5d6a7;
+}
+
+.report-cf-block__title {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.report-cf-big {
+  margin: 0 0 0.5rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-muted {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-light);
+  line-height: 1.4;
+}
+

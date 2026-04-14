@@ -23,6 +23,7 @@ import {
 } from "./store/catalogStore.js";
 import { checkDb, ensureDatabaseExistsIfNeeded } from "./db/pool.js";
 import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
+import { getReportsDashboard } from "./store/reportsStore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
@@ -161,6 +162,32 @@ app.patch("/api/catalog/accounts/:id", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/reports/dashboard", requireAuth, async (req, res) => {
+  try {
+    const from = typeof req.query.from === "string" ? req.query.from : "";
+    const to = typeof req.query.to === "string" ? req.query.to : "";
+    const asOf = typeof req.query.asOf === "string" ? req.query.asOf : "";
+    const out = await getReportsDashboard({ from, to, asOf: asOf || undefined });
+    if (!out.ok) {
+      const code = out.reason === "invalid_range" ? 400 : 503;
+      return res.status(code).json({
+        success: false,
+        message:
+          out.reason === "no_database"
+            ? "Reportería requiere PostgreSQL (DATABASE_URL)."
+            : "Rango de fechas inválido (usa YYYY-MM-DD).",
+        code: out.reason,
+      });
+    }
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al generar reportes",
+    });
+  }
+});
+
 app.post("/api/polizas", requireAuth, async (req, res) => {
   const { type, concept, lines } = req.body || {};
   if (!type || !concept || !Array.isArray(lines) || lines.length < 2) {
@@ -222,6 +249,22 @@ function sendHtmlIfAuthed(htmlFile) {
 app.get("/index.html", sendHtmlIfAuthed("index.html"));
 
 app.get("/catalogo.html", sendHtmlIfAuthed("catalogo.html"));
+
+const reportPages = [
+  "report-balanza.html",
+  "report-situacion-financiera.html",
+  "report-actividad.html",
+  "report-cambios-situacion.html",
+  "report-variacion-capital.html",
+  "report-flujo-efectivo.html",
+];
+for (const f of reportPages) {
+  app.get(`/${f}`, sendHtmlIfAuthed(f));
+}
+
+app.get("/reporteria.html", (req, res) => {
+  res.redirect(302, "/report-balanza.html");
+});
 
 app.get("/placeholder.html", (req, res) => {
   if (!req.session?.userId) {

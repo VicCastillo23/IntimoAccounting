@@ -91,7 +91,10 @@ Si arrancas con una base nueva y el servidor **crea el nombre de BD solo en desa
 - `GET /api/catalog/sat?q=` — código agrupador SAT (referencia; requiere PostgreSQL)
 - `GET /api/catalog/accounts?q=` — catálogo de cuentas de la empresa
 - `POST /api/catalog/accounts`, `PATCH /api/catalog/accounts/:id`
+- `GET /api/reports/dashboard?from=&to=&asOf=` — balanza, estados y flujo (requiere PostgreSQL; vistas **`/report-*.html`**)
 - `GET /health` — comprobación mínima (sin datos sensibles)
+
+**Reportería:** seis páginas HTML (`/report-balanza.html`, `/report-situacion-financiera.html`, etc.) enlazadas desde el menú lateral. La ruta antigua `/reporteria.html` redirige a la balanza. Datos demo locales: **`npm run db:seed-reporting`** (tras `DATABASE_URL` y migraciones). Reinicia el servidor si quieres ver las nuevas pólizas también en la pantalla de pólizas (caché en memoria).
 
 ## PostgreSQL (opcional, mismo RDS que Loyalty)
 

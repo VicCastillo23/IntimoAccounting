@@ -9,6 +9,7 @@
     "dev": "node --watch src/index.js",
     "db:migrate-catalog": "node scripts/run-sql-files.mjs",
     "db:migrate-all": "node scripts/run-sql-files.mjs --all",
+    "db:seed-reporting": "node scripts/seed-reporting-demo.mjs",
     "setup:local": "bash scripts/setup-local-native.sh",
     "pg:stop": "bash scripts/stop-local-pg.sh",
     "gen:data-key": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
