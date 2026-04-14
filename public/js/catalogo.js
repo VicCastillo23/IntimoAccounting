@@ -216,7 +216,12 @@ async function loadSat() {
     renderSat();
     return;
   }
-  await ensureAuthed(res);
+  try {
+    await ensureAuthed(res);
+  } catch (e) {
+    if (e instanceof Error && e.message === "Sesión expirada.") return;
+    throw e;
+  }
   let j;
   try {
     j = await parseJsonResponse(res);
@@ -250,7 +255,12 @@ async function loadChart() {
     renderChart();
     return;
   }
-  await ensureAuthed(res);
+  try {
+    await ensureAuthed(res);
+  } catch (e) {
+    if (e instanceof Error && e.message === "Sesión expirada.") return;
+    throw e;
+  }
   let j;
   try {
     j = await parseJsonResponse(res);
