@@ -2161,3 +2161,28 @@ select.field__input--select:disabled {
   line-height: 1.4;
 }
 
+
+.report-chart-wrap {
+  position: relative;
+  min-height: 260px;
+  height: 34vh;
+  max-height: 380px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.report-chart-wrap--small {
+  min-height: 220px;
+  max-width: 460px;
+}
+
+.report-chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.report-chart-wrap--ready {
+  opacity: 1;
+  transform: translateY(0);
+}

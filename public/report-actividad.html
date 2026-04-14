@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
   <link rel="stylesheet" href="/css/app.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -66,6 +67,12 @@
         <p class="report-toolbar__hint" id="report-meta"></p>
       </div>
       <div id="report-alert" class="report-alert-slot"></div>
+
+      <section class="report-section panel">
+        <h2 class="report-section__title">Tendencia del resultado del periodo</h2>
+        <div class="report-chart-wrap"><canvas id="report-chart-actividad"></canvas></div>
+      </section>
+
       <section class="report-section panel">
         <div class="report-pl" id="report-pl"></div>
       </section>

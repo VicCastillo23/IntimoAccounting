@@ -73,3 +73,49 @@ export async function loadDashboard() {
 export function wireToolbar(onApply) {
   $("#btn-report-apply")?.addEventListener("click", () => void onApply());
 }
+
+/** Animacion uniforme para las graficas de reporteria. */
+export function reportChartAnimation() {
+  return {
+    animation: {
+      duration: 1400,
+      easing: "easeOutQuart",
+    },
+    transitions: {
+      active: {
+        animation: {
+          duration: 280,
+        },
+      },
+    },
+  };
+}
+
+const chartTimers = new Map();
+
+/**
+ * Efecto escalonado: primero texto/tablas, luego gráfica.
+ * @param {string} canvasId
+ * @param {() => void} renderFn
+ * @param {number} [delayMs]
+ */
+export function runChartWithStagger(canvasId, renderFn, delayMs = 220) {
+  const canvas = document.getElementById(canvasId);
+  const wrap = canvas?.closest(".report-chart-wrap");
+  if (wrap) wrap.classList.remove("report-chart-wrap--ready");
+
+  const prev = chartTimers.get(canvasId);
+  if (prev) clearTimeout(prev);
+
+  const timer = setTimeout(() => {
+    renderFn();
+    if (wrap) {
+      requestAnimationFrame(() => {
+        wrap.classList.add("report-chart-wrap--ready");
+      });
+    }
+    chartTimers.delete(canvasId);
+  }, delayMs);
+
+  chartTimers.set(canvasId, timer);
+}
