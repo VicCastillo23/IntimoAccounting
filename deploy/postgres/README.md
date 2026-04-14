@@ -29,9 +29,11 @@ psql -v ON_ERROR_STOP=1 -f 02_pos.sql
 psql -v ON_ERROR_STOP=1 -f 03_invoicing.sql
 psql -v ON_ERROR_STOP=1 -f 04_accounting.sql
 psql -v ON_ERROR_STOP=1 -f 05_accounting_folio_counter.sql
+psql -v ON_ERROR_STOP=1 -f 06_accounting_catalog.sql
+psql -v ON_ERROR_STOP=1 -f 07_sat_codigo_agrupador_seed.sql
 ```
 
-Edita `01_schemas.sql` si tu rol de aplicación no se llama `intimo_loyalty`.
+Los archivos `06` y `07` crean las tablas del **código agrupador SAT** (referencia) y del **catálogo de cuentas de la empresa**, y cargan el listado de códigos agrupadores (verifica contra el PDF oficial del SAT). Edita `01_schemas.sql` si tu rol de aplicación no se llama `intimo_loyalty`.
 
 ## Variables de entorno por servicio
 

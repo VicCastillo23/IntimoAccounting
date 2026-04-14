@@ -1,7 +1,11 @@
 node_modules/
 .env
+
+# Postgres nativo local (scripts/setup-local-native.sh)
+.pgdata/
 .DS_Store
 *.log
+logfile
 
 # Archivos de datos cifrados (usuarios y pólizas)
 data/*.enc

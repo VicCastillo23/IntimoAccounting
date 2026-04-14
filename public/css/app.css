@@ -1016,6 +1016,23 @@ body.modal-poliza-open {
   font-weight: 700;
 }
 
+.modal__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--intimo-gray-light);
+  line-height: 1.35;
+}
+
+.modal__header-text {
+  min-width: 0;
+}
+
+.modal__header--account {
+  align-items: flex-start;
+  padding: 1rem 1.5rem;
+}
+
 .modal__body {
   padding: 1.25rem;
   overflow-y: auto;
@@ -1677,5 +1694,234 @@ body.modal-poliza-open {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Catálogo de cuentas (SAT + empresa) */
+.main--catalogo {
+  max-width: 1400px;
+}
+
+.catalogo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .catalogo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.catalogo-panel .table-wrap {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+}
+
+/* Encabezados fijos al hacer scroll */
+.table-wrap--sticky-head {
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap--sticky-head thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--intimo-surface);
+  box-shadow: 0 1px 0 var(--intimo-outline);
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+.catalogo-table .catalogo-cod {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 5rem;
+  min-width: 4.25rem;
+}
+
+/* Subcódigos (1.1, 2.2…) indentados respecto al padre */
+tr.catalogo-sat-data td {
+  padding-left: calc(0.65rem + var(--sat-depth, 0) * 0.95rem);
+  vertical-align: top;
+}
+
+.catalogo-table--sat .catalogo-sat-desc {
+  min-width: 8rem;
+}
+
+tr.catalogo-sat-section td {
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.04);
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+/* Cuentas empresa: una sola línea; scroll horizontal si no cabe */
+.table-wrap--chart-nowrap {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.catalogo-table--empresa {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.catalogo-table--empresa th,
+.catalogo-table--empresa td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.catalogo-table--empresa .catalogo-cell-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.catalogo-chart-row td {
+  line-height: 1.35;
+}
+
+.polizas-panel-head--split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.catalogo-actions {
+  white-space: nowrap;
+}
+
+.catalogo-btn-danger {
+  color: #b71c1c;
+}
+
+/* Modal nueva/editar cuenta (catálogo) */
+.modal--account {
+  width: min(100%, 36rem);
+  max-width: 36rem;
+}
+
+.modal--account .modal__body {
+  padding: 1.25rem 1.5rem 1.25rem;
+}
+
+.modal--account .modal__footer {
+  padding: 1rem 1.5rem 1.25rem;
+}
+
+.modal--account .field-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem 1.25rem;
+  align-items: start;
+}
+
+/* Etiquetas un poco más legibles que el grid genérico */
+.modal--account .field__label {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--intimo-gray-medium);
+}
+
+.modal--account .field__input,
+.modal--account .field__input--select {
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+
+.field--sat-codagrup > .field__label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--intimo-gray-light);
+}
+
+.field-sat-panel {
+  margin-top: 0.35rem;
+  padding: 1rem 1.1rem;
+  background: var(--intimo-bg);
+  border: 1px solid var(--intimo-outline);
+  border-radius: var(--radius-md);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1rem;
+}
+
+.field--span {
+  grid-column: 1 / -1;
+}
+
+.field-sat-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-light);
+  line-height: 1.4;
+}
+
+.field-sat-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.field-sat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.field-sat-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--intimo-gray-medium);
+}
+
+.field-sat-microhint {
+  font-size: 0.75rem;
+  color: var(--intimo-gray-muted);
+  margin-top: 0.15rem;
+}
+
+.field__input--select {
+  width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  background-color: var(--intimo-surface);
+}
+
+/* Mismo foco que los inputs de texto (sin anillo doble) */
+select.field__input--select:focus {
+  outline: none;
+  border-color: var(--intimo-black);
+  box-shadow: 0 0 0 1px var(--intimo-black);
+}
+
+select.field__input--select:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  background: var(--intimo-bg);
+  color: var(--intimo-gray-medium);
+}
+
+@media (max-width: 600px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal--account {
+    width: min(100%, 100vw - 1.5rem);
   }
 }

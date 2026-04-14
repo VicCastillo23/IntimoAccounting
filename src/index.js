@@ -15,7 +15,14 @@ import {
   saveNewPoliza,
   peekNextFolio,
 } from "./store/polizasStore.js";
-import { checkDb } from "./db/pool.js";
+import {
+  listSatCodigoAgrupador,
+  listChartAccounts,
+  createChartAccount,
+  updateChartAccount,
+} from "./store/catalogStore.js";
+import { checkDb, ensureDatabaseExistsIfNeeded } from "./db/pool.js";
+import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
@@ -87,6 +94,73 @@ app.get("/api/polizas/next-folio", requireAuth, async (_req, res) => {
   }
 });
 
+app.get("/api/catalog/sat", requireAuth, async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const out = await listSatCodigoAgrupador(q);
+    if (!out.ok) {
+      return res.status(503).json({
+        success: false,
+        message: "Catálogo SAT requiere PostgreSQL (DATABASE_URL).",
+        code: out.reason,
+        data: [],
+      });
+    }
+    res.json({ success: true, data: out.rows });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al cargar código agrupador",
+    });
+  }
+});
+
+app.get("/api/catalog/accounts", requireAuth, async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const out = await listChartAccounts(q);
+    if (!out.ok) {
+      return res.status(503).json({
+        success: false,
+        message: "Catálogo de cuentas requiere PostgreSQL (DATABASE_URL).",
+        code: out.reason,
+        data: [],
+      });
+    }
+    res.json({ success: true, data: out.rows });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al cargar cuentas",
+    });
+  }
+});
+
+app.post("/api/catalog/accounts", requireAuth, async (req, res) => {
+  try {
+    const row = await createChartAccount(req.body || {});
+    res.status(201).json({ success: true, data: row });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al crear cuenta";
+    const code = /unique|duplicate|violates/i.test(msg) ? 409 : 400;
+    res.status(code).json({ success: false, message: msg });
+  }
+});
+
+app.patch("/api/catalog/accounts/:id", requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, message: "Id inválido." });
+    }
+    const row = await updateChartAccount(id, req.body || {});
+    res.json({ success: true, data: row });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al actualizar";
+    res.status(400).json({ success: false, message: msg });
+  }
+});
+
 app.post("/api/polizas", requireAuth, async (req, res) => {
   const { type, concept, lines } = req.body || {};
   if (!type || !concept || !Array.isArray(lines) || lines.length < 2) {
@@ -136,14 +210,18 @@ app.get("/login.html", (_req, res) => {
   res.sendFile(path.join(publicDir, "login.html"));
 });
 
-function sendAppIfAuthed(req, res) {
-  if (!req.session?.userId) {
-    return res.redirect("/login.html");
-  }
-  res.sendFile(path.join(publicDir, "index.html"));
+function sendHtmlIfAuthed(htmlFile) {
+  return (req, res) => {
+    if (!req.session?.userId) {
+      return res.redirect("/login.html");
+    }
+    res.sendFile(path.join(publicDir, htmlFile));
+  };
 }
 
-app.get("/index.html", sendAppIfAuthed);
+app.get("/index.html", sendHtmlIfAuthed("index.html"));
+
+app.get("/catalogo.html", sendHtmlIfAuthed("catalogo.html"));
 
 app.get("/placeholder.html", (req, res) => {
   if (!req.session?.userId) {
@@ -159,9 +237,11 @@ app.use(
   })
 );
 
-app.get("/", sendAppIfAuthed);
+app.get("/", sendHtmlIfAuthed("index.html"));
 
 async function main() {
+  await ensureDatabaseExistsIfNeeded();
+  await ensureCatalogDevIfNeeded();
   await initPolizasStore(dataKey);
   app.listen(port, "0.0.0.0", () => {
     console.log(`intimo-accounting http://localhost:${port}`);

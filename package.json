@@ -7,6 +7,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "db:migrate-catalog": "node scripts/run-sql-files.mjs",
+    "db:migrate-all": "node scripts/run-sql-files.mjs --all",
+    "setup:local": "bash scripts/setup-local-native.sh",
+    "pg:stop": "bash scripts/stop-local-pg.sh",
     "gen:data-key": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     "gen:session-secret": "node -e \"console.log(require('crypto').randomBytes(48).toString('base64'))\""
   },

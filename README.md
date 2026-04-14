@@ -39,6 +39,36 @@ La vista **Pólizas** usa layout listado + visualizador (maestro/detalle), captu
 
 Abre [http://localhost:3010](http://localhost:3010). Sin sesión, se redirige a `/login.html`.
 
+### Postgres nativo en la Mac (sin Docker)
+
+1. Instala PostgreSQL con Homebrew y añade `bin` al `PATH` (el script lo detecta en `/opt/homebrew` o `/usr/local`):
+
+   ```bash
+   brew install postgresql@16
+   ```
+
+2. Desde la carpeta del proyecto:
+
+   ```bash
+   npm run setup:local
+   ```
+
+   Esto crea un cluster solo para este proyecto en **`.pgdata/`**, lo arranca en el puerto **5433**, crea la base **`intimo_loyalty`**, ejecuta las migraciones **`00`–`07`** y, si hace falta, añade **`DATABASE_URL`** a tu **`.env`**.
+
+3. Reinicia **`npm run dev`** y entra a [http://localhost:3010/catalogo.html](http://localhost:3010/catalogo.html).
+
+- Detener Postgres local: **`npm run pg:stop`**
+- Si ya tienes Postgres en otro puerto: `PGPORT=5434 npm run setup:local`
+
+### Solo migraciones (ya tienes `DATABASE_URL`)
+
+- Catálogo (06–07): **`npm run db:migrate-catalog`**
+- Todo el esquema (00–07): **`npm run db:migrate-all`**
+
+Sin `DATABASE_URL`, las pólizas pueden seguir en archivo cifrado, pero **`/catalogo.html`** pedirá base de datos.
+
+Si arrancas con una base nueva y el servidor **crea el nombre de BD solo en desarrollo**, puede faltar el esquema: ejecuta **`npm run db:migrate-all`** una vez.
+
 ## Seguridad (implementado)
 
 | Aspecto | Detalle |
@@ -58,6 +88,9 @@ Abre [http://localhost:3010](http://localhost:3010). Sin sesión, se redirige a 
 - `POST /api/auth/logout`
 - `GET /api/auth/me` — `{ user: null | { username } }`
 - `GET /api/polizas`, `POST /api/polizas`
+- `GET /api/catalog/sat?q=` — código agrupador SAT (referencia; requiere PostgreSQL)
+- `GET /api/catalog/accounts?q=` — catálogo de cuentas de la empresa
+- `POST /api/catalog/accounts`, `PATCH /api/catalog/accounts/:id`
 - `GET /health` — comprobación mínima (sin datos sensibles)
 
 ## PostgreSQL (opcional, mismo RDS que Loyalty)
@@ -68,8 +101,9 @@ Si defines **`DATABASE_URL`** en `.env`:
 
 - `GET /health` incluye el estado de conexión y `persistence: "postgresql"`.
 - Las pólizas se guardan en **`accounting.polizas`** / **`accounting.poliza_lines`** (ejecuta también **`deploy/postgres/05_accounting_folio_counter.sql`** en el servidor).
+- **Catálogo de cuentas** (SAT + empresa): ejecuta **`06_accounting_catalog.sql`** y **`07_sat_codigo_agrupador_seed.sql`**. La vista web está en **`/catalogo.html`**.
 
-Sin `DATABASE_URL`, el modo sigue siendo **`data/polizas.enc`** cifrado (`persistence: "file"` en `/health`).
+Sin `DATABASE_URL`, el modo sigue siendo **`data/polizas.enc`** cifrado (`persistence: "file"` en `/health`). El catálogo de cuentas solo está disponible con PostgreSQL.
 
 **Systemd:** el proceso carga `.env` desde la **raíz del proyecto** (`loadEnv.js`), no desde `process.cwd`. Aun así conviene en la unidad: `WorkingDirectory=/ruta/a/IntimoAccounting` y opcionalmente `EnvironmentFile=.../.env`.
 
