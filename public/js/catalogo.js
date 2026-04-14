@@ -13,6 +13,26 @@ async function ensureAuthed(res) {
   }
 }
 
+/** Evita fallos silenciosos si /api devuelve HTML (404, proxy mal) en lugar de JSON. */
+async function parseJsonResponse(res) {
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error(`Respuesta vacía del servidor (HTTP ${res.status}).`);
+  }
+  const first = trimmed[0];
+  if (first !== "{" && first !== "[") {
+    throw new Error(
+      `El servidor no devolvió JSON (HTTP ${res.status}). Suele pasar si no reiniciaste Node tras el deploy, o si Nginx no enruta /api al mismo puerto que la app.`
+    );
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    throw new Error(`JSON inválido (HTTP ${res.status}).`);
+  }
+}
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -187,9 +207,26 @@ function populateSatMinors(majorCode, selectedSatId) {
 }
 
 async function loadSat() {
-  const res = await apiFetch("/api/catalog/sat");
+  let res;
+  try {
+    res = await apiFetch("/api/catalog/sat");
+  } catch {
+    satRows = [];
+    showAlert("Error de red al cargar el código agrupador.");
+    renderSat();
+    return;
+  }
   await ensureAuthed(res);
-  const j = await res.json();
+  let j;
+  try {
+    j = await parseJsonResponse(res);
+  } catch (e) {
+    if (e.message === "Sesión expirada.") return;
+    satRows = [];
+    showAlert(e instanceof Error ? e.message : String(e));
+    renderSat();
+    return;
+  }
   if (!res.ok) {
     satRows = [];
     showAlert(j.message || "No se pudo cargar el código agrupador.");
@@ -204,9 +241,26 @@ async function loadSat() {
 }
 
 async function loadChart() {
-  const res = await apiFetch("/api/catalog/accounts");
+  let res;
+  try {
+    res = await apiFetch("/api/catalog/accounts");
+  } catch {
+    chartRows = [];
+    showAlert("Error de red al cargar cuentas de empresa.");
+    renderChart();
+    return;
+  }
   await ensureAuthed(res);
-  const j = await res.json();
+  let j;
+  try {
+    j = await parseJsonResponse(res);
+  } catch (e) {
+    if (e.message === "Sesión expirada.") return;
+    chartRows = [];
+    showAlert(e instanceof Error ? e.message : String(e));
+    renderChart();
+    return;
+  }
   if (!res.ok) {
     chartRows = [];
     showAlert(j.message || "No se pudo cargar el catálogo de cuentas.");
@@ -444,8 +498,20 @@ function wireUi() {
 }
 
 async function boot() {
-  const me = await apiFetch("/api/auth/me");
-  const j = await me.json();
+  let me;
+  try {
+    me = await apiFetch("/api/auth/me");
+  } catch {
+    showAlert("Error de red. No se pudo comprobar la sesión.");
+    return;
+  }
+  let j;
+  try {
+    j = await parseJsonResponse(me);
+  } catch (e) {
+    showAlert(e instanceof Error ? e.message : String(e));
+    return;
+  }
   if (!j.success || !j.user) {
     window.location.href = "/login.html";
     return;

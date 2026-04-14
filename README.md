@@ -117,6 +117,8 @@ Para que en **AWS** se comporte **como en local** (mismo flujo, `admin` / `admin
 
 Cuando quieras pasar a productivo: **`NODE_ENV=production`**, HTTPS, y **`ACCOUNTING_ADMIN_USER` / `ACCOUNTING_ADMIN_PASSWORD`** obligatorios si aún no existe `data/users.enc`.
 
+**Catálogo vacío o página en blanco tras migrar:** el script `npm run db:migrate-catalog` usa `DATABASE_URL` del `.env` en shell; el **proceso Node** debe tener la misma variable (mismo `.env` vía `loadEnv.js` o `EnvironmentFile` en systemd). Tras `git pull`, ejecuta **`npm ci`** (o `npm install`) y **reinicia el servicio** (PM2/systemd); si no, `/api/catalog/*` puede no existir en el proceso antiguo. Comprueba en el servidor: `curl -sS http://127.0.0.1:PUERTO/health` → `persistence` debe ser `"postgresql"` y `database.ok` true. En Nginx, el `location` que hace proxy a Node debe incluir **`/api`** y **`/catalogo.html`** (o un `location /` al mismo upstream).
+
 ## Próximos pasos
 
 - Sesiones persistentes en Redis u otro store si escalas varias instancias.
