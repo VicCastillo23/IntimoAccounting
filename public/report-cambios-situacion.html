@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
   <link rel="stylesheet" href="/css/app.css" />
+  <link rel="stylesheet" href="/css/print-nif.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -54,15 +55,23 @@
     </aside>
 
     <main class="main main--report">
+      <div id="report-print-header" class="report-print-header-wrap" aria-hidden="true"></div>
       <header class="main__header">
         <h1 class="main__h1">Estado de cambios en la situación financiera</h1>
         <p class="main__lead">Comparativo entre el inicio del periodo y el cierre (saldo inicial vs final).</p>
+        <p class="nif-print-disclaimer">
+          Información preparada con base en las Normas de Información Financiera (NIF) aplicables en México. Cifras en pesos mexicanos (MXN), salvo indicación distinta.
+        </p>
       </header>
       <div class="report-toolbar panel">
         <div class="report-toolbar__dates">
           <label class="report-field"><span>Desde</span><input type="date" id="report-from" class="report-field__input" /></label>
           <label class="report-field"><span>Hasta</span><input type="date" id="report-to" class="report-field__input" /></label>
           <button type="button" class="btn btn--primary btn--sm" id="btn-report-apply">Actualizar</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="btn-report-print" title="Imprimir">
+            <span class="material-symbols-outlined" aria-hidden="true">print</span>
+            Imprimir
+          </button>
         </div>
         <p class="report-toolbar__hint" id="report-meta"></p>
       </div>

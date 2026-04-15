@@ -1,5 +1,6 @@
 import { initAuthShell } from "./auth-shell.js";
 import {
+  applyReportFiscalRange,
   loadDashboard,
   reportChartAnimation,
   runChartWithStagger,
@@ -40,7 +41,9 @@ async function load() {
 }
 
 async function boot() {
-  if (!(await initAuthShell())) return;
+  const session = await initAuthShell({ onFiscalChange: () => void load() });
+  if (!session) return;
+  applyReportFiscalRange(session.fiscalYear);
   wireToolbar(load);
   await load();
 }

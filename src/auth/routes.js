@@ -76,12 +76,35 @@ export function handleLogout(req, res) {
 export function handleMe(req, res) {
   const id = req.session?.userId;
   if (!id) {
-    return res.json({ success: true, user: null });
+    return res.json({ success: true, user: null, fiscalYear: null });
   }
   const u = getUserById(id);
   if (!u) {
     req.session.destroy(() => {});
-    return res.json({ success: true, user: null });
+    return res.json({ success: true, user: null, fiscalYear: null });
   }
-  res.json({ success: true, user: { username: u.username } });
+  const fy = req.session?.fiscalYear;
+  const fiscalYear = typeof fy === "number" && fy >= 1900 && fy <= 2100 ? fy : null;
+  res.json({ success: true, user: { username: u.username }, fiscalYear });
+}
+
+/** POST /api/session/fiscal-year — ejercicio fiscal activo (sesión). */
+export function handleSetFiscalYear(req, res) {
+  const id = req.session?.userId;
+  if (!id) {
+    return res.status(401).json({ success: false, message: "No autenticado." });
+  }
+  const u = getUserById(id);
+  if (!u) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ success: false, message: "Sesión inválida." });
+  }
+  const raw = req.body?.year ?? req.body?.fiscalYear;
+  const y = Number(raw);
+  if (!Number.isFinite(y) || y < 1990 || y > 2100) {
+    return res.status(400).json({ success: false, message: "Ejercicio fiscal inválido." });
+  }
+  const fiscalYear = Math.floor(y);
+  req.session.fiscalYear = fiscalYear;
+  res.json({ success: true, fiscalYear });
 }

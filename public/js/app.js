@@ -1,4 +1,6 @@
 import { initMobileNav } from "./mobile-nav.js";
+import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
+import { initPolizaPrintBranding, refreshPolizaPrintHeader } from "./report-print-branding.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -241,7 +243,7 @@ function filterValidPolizaLines(lines) {
 }
 
 function typeShort(t) {
-  const m = { DIARIO: "Di", INGRESOS: "Ig", EGRESOS: "Eg" };
+  const m = { DIARIO: "Di", INGRESOS: "Ig", EGRESOS: "Eg", TRANSFERENCIA: "Tr" };
   return m[t] || (t ? String(t).slice(0, 2) : "—");
 }
 
@@ -277,6 +279,12 @@ let selectedId = null;
 /** @type {"empty" | "view"} */
 let viewerMode = "empty";
 
+/** @type {string | null} */
+let editingPolizaId = null;
+
+/** Ejercicio fiscal activo (sesión). */
+let sessionFiscalYear = null;
+
 function isCreateModalOpen() {
   const m = document.getElementById("modal-create-poliza");
   return !!(m && !m.hidden);
@@ -285,6 +293,11 @@ function isCreateModalOpen() {
 async function refreshCreateFolioPreview() {
   const el = document.getElementById("create-folio-preview");
   if (!el) return;
+  if (editingPolizaId) {
+    const p = polizas.find((x) => x.id === editingPolizaId);
+    el.textContent = p?.folio || "—";
+    return;
+  }
   try {
     const res = await apiFetch("/api/polizas/next-folio");
     await ensureAuthed(res);
@@ -295,15 +308,32 @@ async function refreshCreateFolioPreview() {
   }
 }
 
+function defaultDateInFiscalYear() {
+  const today = new Date().toISOString().slice(0, 10);
+  const y = Number(today.slice(0, 4));
+  if (sessionFiscalYear != null && y === sessionFiscalYear) return today;
+  if (sessionFiscalYear != null) return `${sessionFiscalYear}-01-15`;
+  return today;
+}
+
+function setCreateDateBounds() {
+  const d = document.getElementById("create-date");
+  if (!d || sessionFiscalYear == null) return;
+  d.min = `${sessionFiscalYear}-01-01`;
+  d.max = `${sessionFiscalYear}-12-31`;
+}
+
 function openCreateModal() {
   const backdrop = document.getElementById("modal-create-poliza");
   if (!backdrop) return;
   backdrop.hidden = false;
   backdrop.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-poliza-open");
-  const today = new Date().toISOString().slice(0, 10);
   const d = document.getElementById("create-date");
-  if (d) d.value = today;
+  if (d) {
+    setCreateDateBounds();
+    d.value = defaultDateInFiscalYear();
+  }
   requestAnimationFrame(() => {
     document.querySelector("#modal-create-poliza .modal--poliza")?.focus();
   });
@@ -315,6 +345,9 @@ function closeCreateModal() {
   backdrop.hidden = true;
   backdrop.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modal-poliza-open");
+  editingPolizaId = null;
+  const title = document.getElementById("modal-create-poliza-title");
+  if (title) title.textContent = "Nueva póliza";
 }
 
 const createLines = [];
@@ -382,6 +415,86 @@ function getMockNewPolizaTemplate() {
       },
     ],
   };
+}
+
+/** Plantilla egresos: por defecto salida desde caja chica / efectivo (101-01). */
+function getMockEgresosTemplate() {
+  return {
+    type: "EGRESOS",
+    concept: "Egreso operativo — caja chica / efectivo (demo)",
+    lines: [
+      {
+        ticketId: "",
+        accountCode: "601-01",
+        accountName: "Gastos generales",
+        lineConcept: "Compra o gasto menor",
+        invoiceUrl: "",
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+        debit: 1000,
+        credit: 0,
+      },
+      {
+        ticketId: "",
+        accountCode: "101-01",
+        accountName: "Caja Chica",
+        lineConcept: "Salida de efectivo",
+        invoiceUrl: "",
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+        debit: 0,
+        credit: 1000,
+      },
+    ],
+  };
+}
+
+/** Plantilla transferencia: movimiento vía bancos (102-01) frente a caja u otras cuentas. */
+function getMockTransferenciaTemplate() {
+  return {
+    type: "TRANSFERENCIA",
+    concept: "Transferencia entre cuentas — bancos (demo)",
+    lines: [
+      {
+        ticketId: "",
+        accountCode: "102-01",
+        accountName: "BBVA cuenta xxxxx",
+        lineConcept: "Depósito o traspaso a banco",
+        invoiceUrl: "",
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+        debit: 500,
+        credit: 0,
+      },
+      {
+        ticketId: "",
+        accountCode: "101-01",
+        accountName: "Caja Chica",
+        lineConcept: "Origen efectivo",
+        invoiceUrl: "",
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+        debit: 0,
+        credit: 500,
+      },
+    ],
+  };
+}
+
+function applyTemplateForType(type) {
+  if (editingPolizaId) return;
+  const t = String(type || "").toUpperCase();
+  let tpl;
+  if (t === "EGRESOS") tpl = getMockEgresosTemplate();
+  else if (t === "TRANSFERENCIA") tpl = getMockTransferenciaTemplate();
+  else if (t === "INGRESOS") tpl = getMockNewPolizaTemplate();
+  else return;
+  createLines.length = 0;
+  tpl.lines.forEach((line) => createLines.push({ ...line }));
+  const conc = $("#create-concept");
+  if (conc) conc.value = tpl.concept;
+  renderCreateLinesTable();
+  updateCreateTotalsBar();
 }
 
 function sourceLabel(ref) {
@@ -462,6 +575,7 @@ function renderViewer() {
         <p class="viewer-empty__text">Selecciona un renglón en el listado o usa <strong>Nueva póliza</strong> para capturar un asiento.</p>
         <p class="viewer-empty__hint">Cada <strong>renglón</strong> corresponde a un <strong>ticket de venta</strong> del día; si el ticket está facturado, verás el enlace de descarga del CFDI/PDF. El cierre diario llenará esta póliza desde la base de datos.</p>
       </div>`;
+    refreshPolizaPrintHeader();
     return;
   }
 
@@ -502,10 +616,11 @@ function renderViewer() {
       : "Origen operación (tablet / inventario). En producción se consolidará con el cierre diario automático.";
 
   root.innerHTML = `
-    <div class="poliza-readonly">
+    <div class="poliza-readonly poliza-print-root">
       <div class="poliza-toolbar">
-        <button type="button" class="poliza-toolbtn" disabled title="Próximamente"><span class="material-symbols-outlined">print</span></button>
-        <button type="button" class="poliza-toolbtn" disabled title="Próximamente"><span class="material-symbols-outlined">delete</span></button>
+        <button type="button" class="poliza-toolbtn" id="btn-poliza-print" title="Imprimir póliza"><span class="material-symbols-outlined">print</span></button>
+        <button type="button" class="poliza-toolbtn" id="btn-poliza-edit" title="Editar póliza"><span class="material-symbols-outlined">edit</span></button>
+        <button type="button" class="poliza-toolbtn poliza-toolbtn--danger" id="btn-poliza-delete" title="Eliminar póliza"><span class="material-symbols-outlined">delete</span></button>
         <span class="poliza-toolbar__spacer"></span>
         <button type="button" class="btn btn--primary btn--sm" id="btn-new-from-view">
           <span class="material-symbols-outlined btn__icon">add</span>
@@ -561,7 +676,11 @@ function renderViewer() {
         <span>${balanced ? "Estado: <strong>Cuadra</strong>" : "Estado: <strong>Revisar cuadre</strong>"}</span>
       </div>
       <p class="poliza-sync-badge">${escapeHtml(syncNote)} · Origen listado: ${escapeHtml(sourceLabel(p.sourceRef))}</p>
+      <p class="poliza-print-disclaimer" aria-hidden="true">
+        Asiento contable conforme a prácticas bajo NIF aplicables en México. Verificar cuadre y respaldo documental (CFDI, contratos) antes de presentación oficial.
+      </p>
     </div>`;
+  refreshPolizaPrintHeader();
 }
 
 function updateCreateTotalsBar() {
@@ -658,6 +777,9 @@ function renderCreateLinesTable() {
 }
 
 async function openCreate() {
+  editingPolizaId = null;
+  const title = document.getElementById("modal-create-poliza-title");
+  if (title) title.textContent = "Nueva póliza";
   const tpl = getMockNewPolizaTemplate();
   createLines.length = 0;
   tpl.lines.forEach((line) => createLines.push({ ...line }));
@@ -667,6 +789,29 @@ async function openCreate() {
   if (sel) sel.value = tpl.type;
   const conc = $("#create-concept");
   if (conc) conc.value = tpl.concept;
+  showAlert("");
+  await refreshCreateFolioPreview();
+  openCreateModal();
+}
+
+async function openEditPoliza(p) {
+  if (!p) return;
+  editingPolizaId = p.id;
+  const title = document.getElementById("modal-create-poliza-title");
+  if (title) title.textContent = "Editar póliza";
+  createLines.length = 0;
+  (p.lines || []).forEach((line) => createLines.push(normLine({ ...line })));
+  renderCreateLinesTable();
+  updateCreateTotalsBar();
+  const sel = $("#create-type");
+  if (sel) sel.value = p.type || "DIARIO";
+  const conc = $("#create-concept");
+  if (conc) conc.value = p.concept || "";
+  const d = $("#create-date");
+  if (d) {
+    setCreateDateBounds();
+    d.value = p.date || defaultDateInFiscalYear();
+  }
   showAlert("");
   await refreshCreateFolioPreview();
   openCreateModal();
@@ -684,7 +829,9 @@ async function load() {
   await ensureAuthed(res);
   const json = await res.json();
   if (!json.success) throw new Error(json.message || "Error al cargar");
+  if (typeof json.fiscalYear === "number") sessionFiscalYear = json.fiscalYear;
   polizas = json.data || [];
+  setCreateDateBounds();
   renderTable();
   if (selectedId && !polizas.find((p) => p.id === selectedId)) {
     selectedId = null;
@@ -710,8 +857,11 @@ function wireUi() {
   $("#create-concept")?.addEventListener("input", () => {
     if (isCreateModalOpen()) updateCreateTotalsBar();
   });
-  $("#create-type")?.addEventListener("change", () => {
-    if (isCreateModalOpen()) updateCreateTotalsBar();
+  $("#create-type")?.addEventListener("change", (e) => {
+    if (isCreateModalOpen()) {
+      applyTemplateForType(e.target?.value);
+      updateCreateTotalsBar();
+    }
   });
 
   document.querySelectorAll(".filters .chip").forEach((btn) => {
@@ -735,6 +885,34 @@ function wireUi() {
     if (e.target.closest("#btn-new-from-view")) {
       openCreate();
       return;
+    }
+    if (e.target.closest("#btn-poliza-print")) {
+      window.print();
+      return;
+    }
+    if (e.target.closest("#btn-poliza-edit")) {
+      const p = polizas.find((x) => x.id === selectedId);
+      if (p) void openEditPoliza(p);
+      return;
+    }
+    if (e.target.closest("#btn-poliza-delete")) {
+      const p = polizas.find((x) => x.id === selectedId);
+      if (!p) return;
+      if (!window.confirm(`¿Eliminar la póliza ${p.folio}? Esta acción no se puede deshacer.`)) return;
+      void (async () => {
+        try {
+          const res = await apiFetch(`/api/polizas/${encodeURIComponent(p.id)}`, { method: "DELETE" });
+          await ensureAuthed(res);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.message || "No se pudo eliminar");
+          selectedId = null;
+          viewerMode = "empty";
+          await load();
+          showAlert("Póliza eliminada.", "success");
+        } catch (err) {
+          if (err.message !== "Sesión expirada.") showAlert(err.message || "Error");
+        }
+      })();
     }
   });
 
@@ -943,6 +1121,7 @@ function wireUi() {
 async function savePoliza() {
   const type = $("#create-type")?.value || "DIARIO";
   const concept = $("#create-concept")?.value?.trim() || "";
+  const polizaDate = $("#create-date")?.value?.trim() || "";
   const lines = mapCreateLinesToPayload();
   const validLines = filterValidPolizaLines(lines);
   if (validLines.length < 2) {
@@ -951,6 +1130,10 @@ async function savePoliza() {
   }
   if (!concept) {
     showAlert("Escribe un concepto general.");
+    return;
+  }
+  if (!polizaDate) {
+    showAlert("Indica la fecha de la póliza.");
     return;
   }
   const t = lineTotals(validLines);
@@ -962,22 +1145,28 @@ async function savePoliza() {
   }
   const btn = $("#btn-save-poliza");
   if (btn) btn.disabled = true;
+  const editing = editingPolizaId;
+  const body = JSON.stringify({ type, concept, polizaDate, lines: validLines });
   try {
-    const res = await apiFetch("/api/polizas", {
-      method: "POST",
+    const res = await apiFetch(editing ? `/api/polizas/${encodeURIComponent(editing)}` : "/api/polizas", {
+      method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, concept, lines: validLines }),
+      body,
     });
     await ensureAuthed(res);
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || "No se pudo guardar");
-    polizas = [json.data, ...polizas];
+    if (editing) {
+      polizas = polizas.map((row) => (row.id === json.data.id ? json.data : row));
+    } else {
+      polizas = [json.data, ...polizas];
+    }
     selectedId = json.data.id;
     viewerMode = "view";
     closeCreateModal();
     renderTable();
     renderViewer();
-    showAlert("Póliza guardada (persistencia cifrada en disco).", "success");
+    showAlert(editing ? "Póliza actualizada." : "Póliza guardada.", "success");
   } catch (err) {
     if (err.message !== "Sesión expirada.") showAlert(err.message || "Error");
   } finally {
@@ -992,8 +1181,36 @@ async function boot() {
     window.location.href = "/login.html";
     return;
   }
+  let fiscalYear = j.fiscalYear;
+  if (fiscalYear == null) {
+    fiscalYear = await ensureFiscalYear();
+    if (fiscalYear == null) return;
+  }
+  sessionFiscalYear = fiscalYear;
+
   const el = document.getElementById("session-user");
   if (el) el.textContent = j.user.username;
+  injectFiscalSidebar(fiscalYear, () => void load());
+
+  void initPolizaPrintBranding(() => {
+    if (viewerMode !== "view" || !selectedId) return null;
+    const p = polizas.find((x) => x.id === selectedId);
+    if (!p) return null;
+    const d = String(p.date || "").slice(0, 10);
+    const long = /^\d{4}-\d{2}-\d{2}$/.test(d)
+      ? new Date(`${d}T12:00:00`).toLocaleDateString("es-MX", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "—";
+    return {
+      reportTitle: `Póliza ${p.folio}`,
+      periodLabel: long,
+      subtitle: String(p.concept || "").trim() || undefined,
+    };
+  });
+
   wireUi();
   initMobileNav();
   try {

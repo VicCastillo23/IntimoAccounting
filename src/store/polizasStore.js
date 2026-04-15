@@ -175,12 +175,34 @@ export function getPolizas() {
   return polizas;
 }
 
+/**
+ * @param {number} year
+ */
+export function filterPolizasByYear(year) {
+  const y = String(year);
+  return getPolizas().filter((p) => String(p.date || "").startsWith(y));
+}
+
+/**
+ * @param {string} id
+ */
+export function getPolizaById(id) {
+  return getPolizas().find((p) => p.id === id) || null;
+}
+
 export function getSeqState() {
   return { seq, count: polizas.length };
 }
 
-export async function peekNextFolio() {
-  const y = new Date().getFullYear();
+/**
+ * Vista previa del siguiente folio para el año indicado (ejercicio fiscal).
+ * @param {number} [fiscalYear]
+ */
+export async function peekNextFolio(fiscalYear) {
+  const y =
+    typeof fiscalYear === "number" && fiscalYear >= 1900 && fiscalYear <= 2100
+      ? fiscalYear
+      : new Date().getFullYear();
   if (!usePg()) {
     const n = String(seq).padStart(4, "0");
     return `P-${y}-${n}`;
@@ -194,20 +216,32 @@ export async function peekNextFolio() {
   return `P-${y}-${n}`;
 }
 
+function isoDateOrToday(raw) {
+  const s = String(raw || "").trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return new Date().toISOString().slice(0, 10);
+}
+
+function yearFromIsoDate(iso) {
+  const s = String(iso || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return parseInt(s.slice(0, 4), 10);
+}
+
 /**
  * Crea una póliza nueva (archivo local o PostgreSQL).
- * @param {{ type: string, concept: string, lines: Array<Record<string, unknown>> }} input
+ * @param {{ type: string, concept: string, polizaDate?: string, lines: Array<Record<string, unknown>> }} input
  */
 export async function saveNewPoliza(input) {
   const type = String(input.type || "").toUpperCase();
   const concept = String(input.concept || "").trim();
   const lines = input.lines || [];
   const id = `pol-${Date.now()}`;
-  const date = new Date().toISOString().slice(0, 10);
+  const date = isoDateOrToday(input.polizaDate);
   const sourceRef = { kind: "manual", label: null, tabletSync: false };
+  const y = yearFromIsoDate(date) ?? new Date().getFullYear();
 
   if (!usePg()) {
-    const y = new Date().getFullYear();
     const n = String(seq++).padStart(4, "0");
     const folio = `P-${y}-${n}`;
     const row = {
@@ -234,7 +268,6 @@ export async function saveNewPoliza(input) {
       `SELECT next_seq FROM accounting.folio_counter WHERE singleton = 1 FOR UPDATE`
     );
     const nextSeq = cRows[0]?.next_seq ?? 1;
-    const y = new Date().getFullYear();
     const folio = `P-${y}-${String(nextSeq).padStart(4, "0")}`;
 
     await client.query(
@@ -290,4 +323,118 @@ export async function saveNewPoliza(input) {
   } finally {
     client.release();
   }
+}
+
+/**
+ * @param {string} id
+ * @param {{ type: string, concept: string, polizaDate?: string, lines: Array<Record<string, unknown>> }} input
+ */
+export async function updatePoliza(id, input) {
+  const pid = String(id || "").trim();
+  if (!pid) throw new Error("Id de póliza inválido.");
+
+  const type = String(input.type || "").toUpperCase();
+  const concept = String(input.concept || "").trim();
+  const lines = input.lines || [];
+  const date = isoDateOrToday(input.polizaDate);
+
+  const existing = getPolizaById(pid);
+  if (!existing) throw new Error("Póliza no encontrada.");
+
+  if (!usePg()) {
+    const idx = polizas.findIndex((p) => p.id === pid);
+    if (idx === -1) throw new Error("Póliza no encontrada.");
+    const folio = existing.folio;
+    const row = {
+      ...existing,
+      date,
+      type,
+      concept,
+      lines,
+      folio,
+    };
+    polizas[idx] = row;
+    polizas = [polizas[idx], ...polizas.filter((_, i) => i !== idx)];
+    persistFile();
+    return row;
+  }
+
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `UPDATE accounting.polizas
+       SET poliza_date = $2::date, type = $3, concept = $4
+       WHERE id = $1`,
+      [pid, date, type, concept]
+    );
+
+    await client.query(`DELETE FROM accounting.poliza_lines WHERE poliza_id = $1`, [pid]);
+
+    let idx = 0;
+    for (const l of lines) {
+      await client.query(
+        `INSERT INTO accounting.poliza_lines
+         (poliza_id, line_index, ticket_id, account_code, account_name, debit, credit, line_concept, invoice_url, fx_currency, depto)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          pid,
+          idx,
+          String(l.ticketId || "").trim(),
+          String(l.accountCode || "").trim(),
+          String(l.accountName || "").trim(),
+          Number(l.debit) || 0,
+          Number(l.credit) || 0,
+          String(l.lineConcept || "").trim(),
+          String(l.invoiceUrl || "").trim(),
+          String(l.fxCurrency || "MX").toUpperCase(),
+          String(l.depto || "ADMINISTRACION").toUpperCase(),
+        ]
+      );
+      idx++;
+    }
+
+    await client.query("COMMIT");
+
+    const row = {
+      ...existing,
+      date,
+      type,
+      concept,
+      lines,
+    };
+    const memIdx = polizas.findIndex((p) => p.id === pid);
+    if (memIdx !== -1) polizas[memIdx] = row;
+    return row;
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * @param {string} id
+ */
+export async function deletePoliza(id) {
+  const pid = String(id || "").trim();
+  if (!pid) throw new Error("Id de póliza inválido.");
+
+  const existing = getPolizaById(pid);
+  if (!existing) throw new Error("Póliza no encontrada.");
+
+  if (!usePg()) {
+    polizas = polizas.filter((p) => p.id !== pid);
+    persistFile();
+    return true;
+  }
+
+  const pool = getPool();
+  const { rowCount } = await pool.query(`DELETE FROM accounting.polizas WHERE id = $1`, [pid]);
+  if (!rowCount) throw new Error("Póliza no encontrada.");
+  polizas = polizas.filter((p) => p.id !== pid);
+  return true;
 }

@@ -18,8 +18,8 @@ if (params.get("m") === "catalogo-cuentas") {
     "estado-flujo-efectivo": "Estado de flujo de efectivo",
   };
 
-  const ok = await initAuthShell();
-  if (!ok) throw new Error("redirect");
+  const session = await initAuthShell();
+  if (!session) throw new Error("redirect");
 
   const m = params.get("m") || "";
   const title = TITLES[m] || "Sección";

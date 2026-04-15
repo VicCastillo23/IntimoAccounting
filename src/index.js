@@ -7,13 +7,16 @@ import { fileURLToPath } from "node:url";
 import { parseKeyHex } from "./crypto/vault.js";
 import { getSessionMiddleware } from "./auth/sessionConfig.js";
 import { requireAuth } from "./auth/middleware.js";
-import { handleLogin, handleLogout, handleMe } from "./auth/routes.js";
+import { handleLogin, handleLogout, handleMe, handleSetFiscalYear } from "./auth/routes.js";
 import { initUsersStore } from "./auth/usersStore.js";
 import {
   initPolizasStore,
-  getPolizas,
   saveNewPoliza,
   peekNextFolio,
+  filterPolizasByYear,
+  getPolizaById,
+  updatePoliza,
+  deletePoliza,
 } from "./store/polizasStore.js";
 import {
   listSatCodigoAgrupador,
@@ -24,6 +27,7 @@ import {
 import { checkDb, ensureDatabaseExistsIfNeeded } from "./db/pool.js";
 import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
 import { getReportsDashboard } from "./store/reportsStore.js";
+import { getBrandingForApi } from "./config/branding.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
@@ -72,20 +76,49 @@ app.post("/api/auth/login", handleLogin);
 app.post("/api/auth/logout", handleLogout);
 app.get("/api/auth/me", handleMe);
 
+app.get("/api/config/branding", requireAuth, (_req, res) => {
+  res.json({ success: true, data: getBrandingForApi() });
+});
+
 const DEPTO_VALUES = ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"];
+
+const POLIZA_TYPES = new Set(["DIARIO", "INGRESOS", "EGRESOS", "TRANSFERENCIA"]);
 
 function normDepto(v) {
   const u = String(v || "").toUpperCase();
   return DEPTO_VALUES.includes(u) ? u : "ADMINISTRACION";
 }
 
-app.get("/api/polizas", requireAuth, (_req, res) => {
-  res.json({ success: true, data: getPolizas() });
+/** @param {import("express").Request} req */
+function resolveFiscalYear(req) {
+  const fy = req.session?.fiscalYear;
+  return typeof fy === "number" && fy >= 1990 && fy <= 2100 ? fy : null;
+}
+
+function yearOfIsoDate(s) {
+  const t = String(s || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  return parseInt(t.slice(0, 4), 10);
+}
+
+app.post("/api/session/fiscal-year", requireAuth, handleSetFiscalYear);
+
+app.get("/api/polizas", requireAuth, (req, res) => {
+  const fy = resolveFiscalYear(req);
+  const data = fy == null ? [] : filterPolizasByYear(fy);
+  res.json({ success: true, data, fiscalYear: fy });
 });
 
-app.get("/api/polizas/next-folio", requireAuth, async (_req, res) => {
+app.get("/api/polizas/next-folio", requireAuth, async (req, res) => {
   try {
-    const folio = await peekNextFolio();
+    const fy = resolveFiscalYear(req);
+    if (fy == null) {
+      return res.status(400).json({
+        success: false,
+        message: "Selecciona un ejercicio fiscal para continuar.",
+      });
+    }
+    const folio = await peekNextFolio(fy);
     res.json({ success: true, folio });
   } catch (e) {
     res.status(500).json({
@@ -188,9 +221,40 @@ app.get("/api/reports/dashboard", requireAuth, async (req, res) => {
   }
 });
 
+function normPolizaLine(l) {
+  const fx = String(l.fxCurrency || "MX").toUpperCase();
+  const fxCurrency = ["MX", "USD", "CAD", "EUR"].includes(fx) ? fx : "MX";
+  return {
+    ticketId: String(l.ticketId || "").trim(),
+    accountCode: String(l.accountCode || "").trim(),
+    accountName: String(l.accountName || "").trim(),
+    debit: Number(l.debit) || 0,
+    credit: Number(l.credit) || 0,
+    lineConcept: String(l.lineConcept || "").trim(),
+    invoiceUrl: String(l.invoiceUrl || "").trim(),
+    fxCurrency,
+    depto: normDepto(l.depto),
+  };
+}
+
 app.post("/api/polizas", requireAuth, async (req, res) => {
-  const { type, concept, lines } = req.body || {};
-  if (!type || !concept || !Array.isArray(lines) || lines.length < 2) {
+  const fy = resolveFiscalYear(req);
+  if (fy == null) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecciona un ejercicio fiscal antes de registrar pólizas.",
+    });
+  }
+
+  const { type, concept, lines, polizaDate } = req.body || {};
+  const typeU = String(type || "").toUpperCase();
+  if (!POLIZA_TYPES.has(typeU)) {
+    return res.status(400).json({
+      success: false,
+      message: "Tipo de póliza no válido.",
+    });
+  }
+  if (!concept || !Array.isArray(lines) || lines.length < 2) {
     return res.status(400).json({
       success: false,
       message: "Se requiere tipo, concepto y al menos dos movimientos.",
@@ -203,33 +267,126 @@ app.post("/api/polizas", requireAuth, async (req, res) => {
       message: "La póliza debe cuadrar: suma cargos = suma abonos.",
     });
   }
-  const normLine = (l) => {
-    const fx = String(l.fxCurrency || "MX").toUpperCase();
-    const fxCurrency = ["MX", "USD", "CAD", "EUR"].includes(fx) ? fx : "MX";
-    return {
-      ticketId: String(l.ticketId || "").trim(),
-      accountCode: String(l.accountCode || "").trim(),
-      accountName: String(l.accountName || "").trim(),
-      debit: Number(l.debit) || 0,
-      credit: Number(l.credit) || 0,
-      lineConcept: String(l.lineConcept || "").trim(),
-      invoiceUrl: String(l.invoiceUrl || "").trim(),
-      fxCurrency,
-      depto: normDepto(l.depto),
-    };
-  };
+
+  const dateStr = typeof polizaDate === "string" ? polizaDate.slice(0, 10) : "";
+  const yDate = yearOfIsoDate(dateStr);
+  if (yDate == null || yDate !== fy) {
+    return res.status(400).json({
+      success: false,
+      message: "La fecha de la póliza debe pertenecer al ejercicio fiscal activo.",
+    });
+  }
 
   try {
     const row = await saveNewPoliza({
-      type: String(type).toUpperCase(),
+      type: typeU,
       concept: String(concept).trim(),
-      lines: lines.map(normLine),
+      polizaDate: dateStr,
+      lines: lines.map(normPolizaLine),
     });
     res.status(201).json({ success: true, data: row });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "No se pudo guardar la póliza";
     const code = /unique|duplicate|violates/i.test(msg) ? 409 : 500;
     res.status(code).json({ success: false, message: msg });
+  }
+});
+
+app.patch("/api/polizas/:id", requireAuth, async (req, res) => {
+  const fy = resolveFiscalYear(req);
+  if (fy == null) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecciona un ejercicio fiscal.",
+    });
+  }
+
+  const id = String(req.params.id || "").trim();
+  const existing = getPolizaById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: "Póliza no encontrada." });
+  }
+  const yExisting = yearOfIsoDate(String(existing.date || ""));
+  if (yExisting !== fy) {
+    return res.status(403).json({
+      success: false,
+      message: "Esta póliza no pertenece al ejercicio fiscal activo.",
+    });
+  }
+
+  const { type, concept, lines, polizaDate } = req.body || {};
+  const typeU = String(type || "").toUpperCase();
+  if (!POLIZA_TYPES.has(typeU)) {
+    return res.status(400).json({
+      success: false,
+      message: "Tipo de póliza no válido.",
+    });
+  }
+  if (!concept || !Array.isArray(lines) || lines.length < 2) {
+    return res.status(400).json({
+      success: false,
+      message: "Se requiere concepto y al menos dos movimientos.",
+    });
+  }
+  const t = totals(lines);
+  if (!t.balanced) {
+    return res.status(400).json({
+      success: false,
+      message: "La póliza debe cuadrar: suma cargos = suma abonos.",
+    });
+  }
+
+  const dateStr = typeof polizaDate === "string" ? polizaDate.slice(0, 10) : "";
+  const yDate = yearOfIsoDate(dateStr);
+  if (yDate == null || yDate !== fy) {
+    return res.status(400).json({
+      success: false,
+      message: "La fecha de la póliza debe pertenecer al ejercicio fiscal activo.",
+    });
+  }
+
+  try {
+    const row = await updatePoliza(id, {
+      type: typeU,
+      concept: String(concept).trim(),
+      polizaDate: dateStr,
+      lines: lines.map(normPolizaLine),
+    });
+    res.json({ success: true, data: row });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "No se pudo actualizar la póliza";
+    res.status(400).json({ success: false, message: msg });
+  }
+});
+
+app.delete("/api/polizas/:id", requireAuth, async (req, res) => {
+  const fy = resolveFiscalYear(req);
+  if (fy == null) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecciona un ejercicio fiscal.",
+    });
+  }
+
+  const id = String(req.params.id || "").trim();
+  const existing = getPolizaById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: "Póliza no encontrada." });
+  }
+  const yExisting = yearOfIsoDate(String(existing.date || ""));
+  if (yExisting !== fy) {
+    return res.status(403).json({
+      success: false,
+      message: "Esta póliza no pertenece al ejercicio fiscal activo.",
+    });
+  }
+
+  try {
+    await deletePoliza(id);
+    res.json({ success: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "No se pudo eliminar la póliza";
+    res.status(400).json({ success: false, message: msg });
   }
 });
 

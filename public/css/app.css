@@ -237,6 +237,39 @@ body.nav-drawer-open .nav-backdrop {
   color: #fff;
 }
 
+.sidebar__fiscal {
+  margin: 0.5rem 0 1rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sidebar__fiscal-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.9;
+}
+
+.sidebar__fiscal-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.sidebar__fiscal-row .field__input--compact {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+}
+
+.modal--fiscal {
+  max-width: 420px;
+}
+
 .sidebar__link--as-btn {
   width: 100%;
   border: none;
@@ -1308,6 +1341,11 @@ body.modal-poliza-open {
 
 .poliza-toolbtn .material-symbols-outlined {
   font-size: 1.25rem;
+}
+
+.poliza-toolbtn--danger:hover:not(:disabled) {
+  border-color: #c62828;
+  color: #c62828;
 }
 
 .poliza-toolbar__spacer {

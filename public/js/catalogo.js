@@ -1,4 +1,5 @@
 import { initMobileNav } from "./mobile-nav.js";
+import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -526,8 +527,17 @@ async function boot() {
     window.location.href = "/login.html";
     return;
   }
+  let fiscalYear = j.fiscalYear;
+  if (fiscalYear == null) {
+    fiscalYear = await ensureFiscalYear();
+    if (fiscalYear == null) return;
+  }
   const el = document.getElementById("session-user");
   if (el) el.textContent = j.user.username;
+  injectFiscalSidebar(fiscalYear, async () => {
+    await loadSat();
+    await loadChart();
+  });
   wireUi();
   initMobileNav();
   await loadSat();

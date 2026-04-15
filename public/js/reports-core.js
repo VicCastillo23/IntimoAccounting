@@ -1,3 +1,5 @@
+import { initReportPrintBranding } from "./report-print-branding.js";
+
 const $ = (sel, root = document) => root.querySelector(sel);
 
 export { $ };
@@ -27,6 +29,17 @@ export function defaultRange() {
   from.setMonth(from.getMonth() - 3);
   const iso = (d) => d.toISOString().slice(0, 10);
   return { from: iso(from), to: iso(to) };
+}
+
+/** Valores por defecto del ejercicio (1 ene – 31 dic); el usuario puede cambiar el rango libremente. */
+export function applyReportFiscalRange(fiscalYear) {
+  const fromEl = $("#report-from");
+  const toEl = $("#report-to");
+  if (!fromEl || !toEl) return;
+  const y = Number(fiscalYear);
+  if (!Number.isFinite(y)) return;
+  fromEl.value = `${y}-01-01`;
+  toEl.value = `${y}-12-31`;
 }
 
 export function showAlert(msg, kind = "error") {
@@ -72,6 +85,10 @@ export async function loadDashboard() {
 
 export function wireToolbar(onApply) {
   $("#btn-report-apply")?.addEventListener("click", () => void onApply());
+  $("#btn-report-print")?.addEventListener("click", () => {
+    window.print();
+  });
+  void initReportPrintBranding(getDateRange);
 }
 
 /** Animacion uniforme para las graficas de reporteria. */
