@@ -1,5 +1,6 @@
 import "./loadEnv.js";
 import express from "express";
+import multer from "multer";
 import helmet from "helmet";
 import session from "express-session";
 import path from "path";
@@ -14,6 +15,7 @@ import {
   saveNewPoliza,
   peekNextFolio,
   filterPolizasByYear,
+  getLibroDiarioEntries,
   getPolizaById,
   updatePoliza,
   deletePoliza,
@@ -26,14 +28,33 @@ import {
 } from "./store/catalogStore.js";
 import { checkDb, ensureDatabaseExistsIfNeeded } from "./db/pool.js";
 import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
-import { getReportsDashboard } from "./store/reportsStore.js";
+import { getLedgerAuxiliarMayor, getReportsDashboard } from "./store/reportsStore.js";
 import { upsertPosPurchaseOrder } from "./store/posIngestStore.js";
+import {
+  buildActivosTemplateXlsx,
+  importActivosFromExcelBuffer,
+  listAssetInventory,
+  createAssetInventoryItem,
+  updateAssetInventoryItem,
+} from "./store/activosStore.js";
+import {
+  listDepreciationSchedules,
+  createDepreciationSchedule,
+  updateDepreciationSchedule,
+  syncDepreciationFromActivos,
+} from "./store/depreciacionStore.js";
+import { calcularFactorActualizacion } from "./services/inegiInpc.js";
 import { getBrandingForApi } from "./config/branding.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
 const app = express();
 const port = Number(process.env.PORT) || 3010;
+
+const uploadActivos = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+});
 
 const trustProxyEnv = String(process.env.TRUST_PROXY || "").toLowerCase();
 const useTrustProxy =
@@ -213,6 +234,371 @@ app.patch("/api/catalog/accounts/:id", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/activos/plantilla.xlsx", requireAuth, (_req, res) => {
+  try {
+    const buf = buildActivosTemplateXlsx();
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", 'attachment; filename="plantilla-activos.xlsx"');
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "No se pudo generar la plantilla.",
+    });
+  }
+});
+
+app.get("/api/activos", requireAuth, async (req, res) => {
+  try {
+    const limit = Number(req.query.limit);
+    const batchId = typeof req.query.batchId === "string" ? req.query.batchId : "";
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const out = await listAssetInventory({ limit, batchId, q });
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Inventario de activos requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+          data: [],
+        });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message:
+            "Falta la tabla de activos. Ejecuta npm run db:migrate-all o aplica deploy/postgres/08_asset_inventory.sql.",
+          code: out.reason,
+          data: [],
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: "Error al listar activos.",
+        code: out.reason,
+      });
+    }
+    res.json({ success: true, data: out.rows });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al listar activos",
+    });
+  }
+});
+
+app.post("/api/activos", requireAuth, async (req, res) => {
+  try {
+    const out = await createAssetInventoryItem(req.body || {});
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Registrar activos requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+        });
+      }
+      if (out.reason === "validation") {
+        return res.status(400).json({ success: false, message: out.message || "Datos inválidos." });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message: out.message || "Falta migración de activos.",
+          code: out.reason,
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: out.message || "No se pudo guardar.",
+      });
+    }
+    res.status(201).json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al crear activo",
+    });
+  }
+});
+
+app.patch("/api/activos/:id", requireAuth, async (req, res) => {
+  try {
+    const out = await updateAssetInventoryItem(req.params.id, req.body || {});
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Actualizar activos requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+        });
+      }
+      if (out.reason === "validation") {
+        return res.status(400).json({ success: false, message: out.message || "Datos inválidos." });
+      }
+      if (out.reason === "not_found") {
+        return res.status(404).json({ success: false, message: out.message || "No encontrado." });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message: out.message || "Falta migración de activos.",
+          code: out.reason,
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: out.message || "No se pudo actualizar.",
+      });
+    }
+    res.json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al actualizar activo",
+    });
+  }
+});
+
+app.get("/api/depreciaciones", requireAuth, async (req, res) => {
+  try {
+    const limit = Number(req.query.limit);
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const fyQ = Number(req.query.fy);
+    const fy =
+      Number.isFinite(fyQ) && fyQ >= 1990 && fyQ <= 2100 ? Math.floor(fyQ) : undefined;
+    const out = await listDepreciationSchedules({ limit, q, fy });
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Este módulo requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+          data: [],
+          meta: { yearColumns: [] },
+        });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message:
+            "Falta migración de depreciaciones. Ejecuta npm run db:migrate-all (archivos 09 y 10 en deploy/postgres).",
+          code: out.reason,
+          data: [],
+          meta: { yearColumns: [] },
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: "Error al listar registros.",
+        code: out.reason,
+      });
+    }
+    res.json({
+      success: true,
+      data: out.rows,
+      meta: { yearColumns: out.yearColumns ?? [] },
+    });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al listar depreciaciones",
+    });
+  }
+});
+
+app.post("/api/depreciaciones/sync-from-activos", requireAuth, async (req, res) => {
+  try {
+    const out = await syncDepreciationFromActivos();
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Este módulo requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+        });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message: out.message || "Falta migración.",
+          code: out.reason,
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: out.message || "No se pudo sincronizar.",
+      });
+    }
+    res.status(201).json({ success: true, data: { inserted: out.inserted ?? 0 } });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al sincronizar",
+    });
+  }
+});
+
+app.get("/api/inpc/factor", requireAuth, async (req, res) => {
+  try {
+    const from = String(req.query.from || "").trim();
+    const to = String(req.query.to || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to)) {
+      return res.status(400).json({
+        success: false,
+        message: "Indica from=YYYY-MM y to=YYYY-MM (mes del INPC a comparar).",
+      });
+    }
+    const [fy, fm] = from.split("-").map((x) => Number(x));
+    const [ty, tm] = to.split("-").map((x) => Number(x));
+    const data = await calcularFactorActualizacion(fy, fm, ty, tm);
+    res.json({ success: true, data });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = /** @type {{ code?: string }} */ (e).code;
+    const status = code === "missing_token" ? 503 : 502;
+    res.status(status).json({ success: false, message: msg });
+  }
+});
+
+app.post("/api/depreciaciones", requireAuth, async (req, res) => {
+  try {
+    const out = await createDepreciationSchedule(req.body || {});
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Este módulo requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+        });
+      }
+      if (out.reason === "validation") {
+        return res.status(400).json({ success: false, message: out.message || "Datos inválidos." });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message: out.message || "Falta migración.",
+          code: out.reason,
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: out.message || "No se pudo guardar.",
+      });
+    }
+    res.status(201).json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al crear registro",
+    });
+  }
+});
+
+app.patch("/api/depreciaciones/:id", requireAuth, async (req, res) => {
+  try {
+    const out = await updateDepreciationSchedule(req.params.id, req.body || {});
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Este módulo requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+        });
+      }
+      if (out.reason === "validation") {
+        return res.status(400).json({ success: false, message: out.message || "Datos inválidos." });
+      }
+      if (out.reason === "not_found") {
+        return res.status(404).json({ success: false, message: out.message || "No encontrado." });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message: out.message || "Falta migración.",
+          code: out.reason,
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: out.message || "No se pudo actualizar.",
+      });
+    }
+    res.json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al actualizar registro",
+    });
+  }
+});
+
+app.post(
+  "/api/activos/import",
+  requireAuth,
+  (req, res, next) => {
+    uploadActivos.single("file")(req, res, (err) => {
+      if (err) {
+        const msg =
+          err.code === "LIMIT_FILE_SIZE"
+            ? "Archivo demasiado grande (máx. 8 MB)."
+            : err.message || "Error al recibir el archivo.";
+        return res.status(400).json({ success: false, message: msg });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const f = req.file;
+      if (!f?.buffer) {
+        return res.status(400).json({ success: false, message: "Adjunta un archivo Excel (.xlsx o .xls)." });
+      }
+      const name = String(f.originalname || "").toLowerCase();
+      if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
+        return res.status(400).json({
+          success: false,
+          message: "Formato no soportado. Usa Excel .xlsx o .xls.",
+        });
+      }
+      const out = await importActivosFromExcelBuffer(f.buffer, f.originalname || "import.xlsx");
+      if (!out.ok) {
+        if (out.reason === "no_database") {
+          return res.status(503).json({
+            success: false,
+            message: "Importar activos requiere PostgreSQL (DATABASE_URL).",
+            code: out.reason,
+          });
+        }
+        if (out.reason === "parse_error") {
+          return res.status(400).json({ success: false, message: out.message || "Archivo inválido." });
+        }
+        if (out.reason === "missing_table") {
+          return res.status(503).json({
+            success: false,
+            message: out.message || "Falta migración de activos.",
+            code: out.reason,
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: out.message || "No se pudo importar.",
+        });
+      }
+      res.status(201).json({ success: true, data: out });
+    } catch (e) {
+      res.status(500).json({
+        success: false,
+        message: e instanceof Error ? e.message : "Error al importar",
+      });
+    }
+  }
+);
+
 app.post("/api/pos/purchase-orders", requirePosIngestAuth, async (req, res) => {
   try {
     const b = req.body || {};
@@ -261,6 +647,59 @@ app.get("/api/reports/dashboard", requireAuth, async (req, res) => {
       message: e instanceof Error ? e.message : "Error al generar reportes",
     });
   }
+});
+
+app.get("/api/reports/auxiliar-mayor", requireAuth, async (req, res) => {
+  try {
+    const from = typeof req.query.from === "string" ? req.query.from : "";
+    const to = typeof req.query.to === "string" ? req.query.to : "";
+    const account = typeof req.query.account === "string" ? req.query.account : "";
+    const out = await getLedgerAuxiliarMayor({ from, to, accountCode: account });
+    if (!out.ok) {
+      const code =
+        out.reason === "invalid_range" || out.reason === "missing_account"
+          ? 400
+          : out.reason === "no_database"
+            ? 503
+            : 500;
+      const message =
+        out.reason === "no_database"
+          ? "Auxiliar requiere PostgreSQL (DATABASE_URL)."
+          : out.reason === "missing_account"
+            ? "Indica el número de cuenta (NumCta)."
+            : out.reason === "invalid_range"
+              ? "Rango de fechas inválido (usa YYYY-MM-DD)."
+              : "No se pudo generar el auxiliar.";
+      return res.status(code).json({ success: false, message, code: out.reason });
+    }
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al generar auxiliar de mayor",
+    });
+  }
+});
+
+app.get("/api/reports/libro-diario", requireAuth, (req, res) => {
+  const fy = resolveFiscalYear(req);
+  if (fy == null) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecciona un ejercicio fiscal antes de consultar el libro diario.",
+    });
+  }
+  const from = typeof req.query.from === "string" ? req.query.from : "";
+  const to = typeof req.query.to === "string" ? req.query.to : "";
+  const out = getLibroDiarioEntries({ from, to, fiscalYear: fy });
+  if (!out.ok) {
+    const message =
+      out.reason === "invalid_range"
+        ? "Rango de fechas inválido (usa YYYY-MM-DD)."
+        : "No se pudo armar el libro diario.";
+    return res.status(400).json({ success: false, message, code: out.reason });
+  }
+  res.json({ success: true, data: out });
 });
 
 function normPolizaLine(l) {
@@ -448,6 +887,10 @@ function sendHtmlIfAuthed(htmlFile) {
 app.get("/index.html", sendHtmlIfAuthed("index.html"));
 
 app.get("/catalogo.html", sendHtmlIfAuthed("catalogo.html"));
+app.get("/auxiliar-mayor.html", sendHtmlIfAuthed("auxiliar-mayor.html"));
+app.get("/libro-diario.html", sendHtmlIfAuthed("libro-diario.html"));
+app.get("/activos.html", sendHtmlIfAuthed("activos.html"));
+app.get("/amortizaciones.html", sendHtmlIfAuthed("amortizaciones.html"));
 
 const reportPages = [
   "report-balanza.html",

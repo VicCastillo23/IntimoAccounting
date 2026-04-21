@@ -184,6 +184,84 @@ export function filterPolizasByYear(year) {
 }
 
 /**
+ * Libro diario: pólizas del ejercicio fiscal dentro del rango de fechas, orden cronológico ascendente.
+ * Usa el mismo conjunto en memoria que `/api/polizas` (año fiscal activo).
+ *
+ * @param {{ from: string, to: string, fiscalYear: number }} p
+ */
+export function getLibroDiarioEntries(p) {
+  const fy = Number(p.fiscalYear);
+  if (!Number.isFinite(fy)) return { ok: false, reason: "no_fiscal_year" };
+  const fromD = String(p.from || "").slice(0, 10);
+  const toD = String(p.to || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromD) || !/^\d{4}-\d{2}-\d{2}$/.test(toD)) {
+    return { ok: false, reason: "invalid_range" };
+  }
+
+  const entries = filterPolizasByYear(fy)
+    .filter((pol) => {
+      const d = String(pol.date || "").slice(0, 10);
+      return d >= fromD && d <= toD;
+    })
+    .sort((a, b) => {
+      const c = String(a.date).localeCompare(String(b.date));
+      if (c !== 0) return c;
+      return String(a.folio).localeCompare(String(b.folio), "es", { numeric: true });
+    })
+    .map((pol) => {
+      const lines = Array.isArray(pol.lines) ? pol.lines : [];
+      let totalDebit = 0;
+      let totalCredit = 0;
+      const lineRows = lines.map((l) => {
+        const deb = Number(l.debit) || 0;
+        const cred = Number(l.credit) || 0;
+        totalDebit += deb;
+        totalCredit += cred;
+        return {
+          ticketId: String(l.ticketId || ""),
+          accountCode: String(l.accountCode || ""),
+          accountName: String(l.accountName || ""),
+          lineConcept: String(l.lineConcept || ""),
+          debit: deb,
+          credit: cred,
+          fxCurrency: String(l.fxCurrency || "MX"),
+          depto: String(l.depto || ""),
+        };
+      });
+      return {
+        id: pol.id,
+        folio: pol.folio,
+        date: pol.date,
+        type: pol.type,
+        concept: pol.concept,
+        totalDebit,
+        totalCredit,
+        lines: lineRows,
+      };
+    });
+
+  let periodDebit = 0;
+  let periodCredit = 0;
+  for (const e of entries) {
+    periodDebit += e.totalDebit;
+    periodCredit += e.totalCredit;
+  }
+
+  return {
+    ok: true,
+    range: { from: fromD, to: toD },
+    fiscalYear: fy,
+    entries,
+    totals: {
+      debit: periodDebit,
+      credit: periodCredit,
+      polizaCount: entries.length,
+      diff: Math.abs(periodDebit - periodCredit),
+    },
+  };
+}
+
+/**
  * @param {string} id
  */
 export function getPolizaById(id) {

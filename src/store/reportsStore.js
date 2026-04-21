@@ -304,3 +304,105 @@ export async function getReportsDashboard(range) {
     client.release();
   }
 }
+
+/**
+ * Auxiliar de mayor: movimientos de una cuenta (NumCta) en un rango, con saldo acumulado.
+ * Saldo inicial = movimientos con fecha estrictamente anterior a `from` (Debe − Haber).
+ *
+ * @param {{ from: string, to: string, accountCode: string }} p fechas ISO YYYY-MM-DD
+ */
+export async function getLedgerAuxiliarMayor(p) {
+  const pool = getPool();
+  if (!pool) return { ...noDb() };
+
+  const from = String(p.from || "").slice(0, 10);
+  const to = String(p.to || "").slice(0, 10);
+  const accountCode = String(p.accountCode || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    return { ok: false, reason: "invalid_range" };
+  }
+  if (!accountCode) {
+    return { ok: false, reason: "missing_account" };
+  }
+
+  const client = await pool.connect();
+  try {
+    const { rows: openRows } = await client.query(
+      `
+      SELECT
+        COALESCE(SUM(pl.debit), 0)::float8 AS debit,
+        COALESCE(SUM(pl.credit), 0)::float8 AS credit
+      FROM accounting.poliza_lines pl
+      INNER JOIN accounting.polizas p ON p.id = pl.poliza_id
+      WHERE pl.account_code = $1 AND p.poliza_date < $2::date
+      `,
+      [accountCode, from]
+    );
+    const d0 = Number(openRows[0]?.debit) || 0;
+    const c0 = Number(openRows[0]?.credit) || 0;
+    const openingBalance = d0 - c0;
+
+    const { rows: metaRows } = await client.query(
+      `SELECT descripcion, natur FROM accounting.chart_accounts WHERE num_cta = $1 LIMIT 1`,
+      [accountCode]
+    );
+    const accountName = String(metaRows[0]?.descripcion || "").trim();
+    const natur = metaRows[0]?.natur != null ? String(metaRows[0].natur).trim() : null;
+
+    const { rows: movRows } = await client.query(
+      `
+      SELECT
+        p.poliza_date::text AS poliza_date,
+        p.folio,
+        p.type AS poliza_type,
+        p.concept AS poliza_concept,
+        p.id AS poliza_id,
+        pl.line_index,
+        pl.line_concept,
+        pl.debit::float8 AS debit,
+        pl.credit::float8 AS credit
+      FROM accounting.poliza_lines pl
+      INNER JOIN accounting.polizas p ON p.id = pl.poliza_id
+      WHERE pl.account_code = $1
+        AND p.poliza_date >= $2::date
+        AND p.poliza_date <= $3::date
+      ORDER BY p.poliza_date ASC, p.folio ASC, pl.line_index ASC
+      `,
+      [accountCode, from, to]
+    );
+
+    let running = openingBalance;
+    const movements = movRows.map((r) => {
+      const deb = Number(r.debit) || 0;
+      const cred = Number(r.credit) || 0;
+      running += deb - cred;
+      return {
+        polizaDate: r.poliza_date,
+        folio: r.folio,
+        polizaType: r.poliza_type,
+        polizaConcept: r.poliza_concept,
+        polizaId: r.poliza_id,
+        lineIndex: r.line_index,
+        lineConcept: r.line_concept,
+        debit: deb,
+        credit: cred,
+        balance: running,
+      };
+    });
+
+    const closingBalance = running;
+
+    return {
+      ok: true,
+      range: { from, to },
+      accountCode,
+      accountName,
+      natur,
+      openingBalance,
+      closingBalance,
+      movements,
+    };
+  } finally {
+    client.release();
+  }
+}

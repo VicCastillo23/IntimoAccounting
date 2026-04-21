@@ -4,14 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#000000" />
-  <title>Balanza de comprobación · Íntimo Contabilidad</title>
+  <title>Auxiliares de mayor · Íntimo Contabilidad</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
   <link rel="stylesheet" href="/css/app.css" />
   <link rel="stylesheet" href="/css/print-nif.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -35,13 +34,13 @@
         <p class="sidebar__section-title">Contabilidad</p>
         <a class="sidebar__link" href="/"><span class="material-symbols-outlined" aria-hidden="true">dynamic_feed</span>Pólizas dinámicas</a>
         <a class="sidebar__link" href="/catalogo.html"><span class="material-symbols-outlined" aria-hidden="true">list_alt</span>Catálogo de cuentas</a>
-        <a class="sidebar__link" href="/auxiliar-mayor.html"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span>Auxiliares de mayor</a>
+        <a class="sidebar__link sidebar__link--active" href="/auxiliar-mayor.html"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span>Auxiliares de mayor</a>
         <a class="sidebar__link" href="/libro-diario.html"><span class="material-symbols-outlined" aria-hidden="true">import_contacts</span>Libro diario</a>
         <a class="sidebar__link" href="/placeholder.html?m=control-almacen"><span class="material-symbols-outlined" aria-hidden="true">warehouse</span>Control de almacén</a>
         <a class="sidebar__link" href="/activos.html"><span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>Control de activos</a>
         <a class="sidebar__link" href="/amortizaciones.html"><span class="material-symbols-outlined" aria-hidden="true">trending_down</span>Control de depreciaciones y amortizaciones</a>
         <p class="sidebar__section-title">Reportería</p>
-        <a class="sidebar__link sidebar__link--active" href="/report-balanza.html"><span class="material-symbols-outlined" aria-hidden="true">balance</span>Balanza de comprobación</a>
+        <a class="sidebar__link" href="/report-balanza.html"><span class="material-symbols-outlined" aria-hidden="true">balance</span>Balanza de comprobación</a>
         <a class="sidebar__link" href="/report-situacion-financiera.html"><span class="material-symbols-outlined" aria-hidden="true">pie_chart</span>Estado de situación financiera</a>
         <a class="sidebar__link" href="/report-actividad.html"><span class="material-symbols-outlined" aria-hidden="true">analytics</span>Estado de actividad</a>
         <a class="sidebar__link" href="/report-cambios-situacion.html"><span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>Estado de cambios en la situación financiera</a>
@@ -51,21 +50,27 @@
         <a class="sidebar__link" href="/health" target="_blank" rel="noopener"><span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>Estado del servicio</a>
         <button type="button" class="sidebar__link sidebar__link--as-btn" id="btn-logout"><span class="material-symbols-outlined" aria-hidden="true">logout</span>Cerrar sesión</button>
       </nav>
-      <p class="sidebar__foot">Clasificación por código agrupador SAT (Anexo 24).</p>
+      <p class="sidebar__foot">Movimientos según pólizas registradas en el ejercicio.</p>
     </aside>
 
     <main class="main main--report">
       <div id="report-print-header" class="report-print-header-wrap" aria-hidden="true"></div>
       <header class="main__header">
-        <h1 class="main__h1">Balanza de comprobación</h1>
-        <p class="main__lead">Saldos por cuenta de mayor en el periodo (cargos, abonos y saldos deudor/acreedor).</p>
-        <p class="nif-print-disclaimer">
-          Información preparada con base en las Normas de Información Financiera (NIF) aplicables en México. Cifras en pesos mexicanos (MXN), salvo indicación distinta.
+        <h1 class="main__h1">Auxiliares de mayor</h1>
+        <p class="main__lead">
+          Detalle de movimientos por cuenta (NumCta) en un periodo: saldo inicial, cargos, abonos y saldo acumulado
+          (Debe − Haber). Los datos provienen de las líneas de póliza enlazadas al catálogo.
         </p>
       </header>
 
       <div class="report-toolbar panel">
         <div class="report-toolbar__dates">
+          <label class="report-field report-field--account">
+            <span>Cuenta (NumCta)</span>
+            <select id="aux-account" class="report-field__input" aria-label="Cuenta de mayor">
+              <option value="">— Elegir cuenta —</option>
+            </select>
+          </label>
           <label class="report-field"><span>Desde</span><input type="date" id="report-from" class="report-field__input" /></label>
           <label class="report-field"><span>Hasta</span><input type="date" id="report-to" class="report-field__input" /></label>
           <button type="button" class="btn btn--primary btn--sm" id="btn-report-apply">Actualizar</button>
@@ -78,33 +83,29 @@
       </div>
       <div id="report-alert" class="report-alert-slot"></div>
 
-      <section class="report-section panel report-hide-print">
-        <h2 class="report-section__title">Top cuentas por saldo neto</h2>
-        <div class="report-chart-wrap"><canvas id="report-chart-balanza"></canvas></div>
-      </section>
-
-
       <section class="report-section panel">
         <div class="table-wrap table-wrap--sticky-head">
-          <table class="data-table data-table--dense report-table">
+          <table class="data-table data-table--dense report-table auxiliar-table">
             <thead>
               <tr>
-                <th>Cuenta</th>
-                <th>Nombre</th>
+                <th>Fecha</th>
+                <th>Folio</th>
+                <th>Tipo</th>
+                <th>Concepto póliza</th>
+                <th>Concepto línea</th>
                 <th class="report-num">Debe</th>
                 <th class="report-num">Haber</th>
-                <th class="report-num">Saldo D</th>
-                <th class="report-num">Saldo A</th>
+                <th class="report-num">Saldo</th>
               </tr>
             </thead>
-            <tbody id="report-tbody-balanza">
-              <tr><td colspan="6" class="data-table__empty">Cargando…</td></tr>
+            <tbody id="aux-tbody">
+              <tr><td colspan="8" class="data-table__empty">Elige una cuenta y pulsa Actualizar.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
     </main>
   </div>
-  <script src="/js/report-balanza.js" type="module"></script>
+  <script src="/js/auxiliar-mayor.js" type="module"></script>
 </body>
 </html>

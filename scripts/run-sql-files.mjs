@@ -31,6 +31,9 @@ const ALL_MIGRATIONS = [
   "deploy/postgres/05_accounting_folio_counter.sql",
   "deploy/postgres/06_accounting_catalog.sql",
   "deploy/postgres/07_sat_codigo_agrupador_seed.sql",
+  "deploy/postgres/08_asset_inventory.sql",
+  "deploy/postgres/09_depreciation_amortization.sql",
+  "deploy/postgres/10_depreciation_pct_ipc.sql",
 ];
 
 const argv = process.argv.slice(2);

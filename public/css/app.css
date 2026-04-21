@@ -2071,6 +2071,11 @@ select.field__input--select:disabled {
   width: 100%;
 }
 
+/* Tablas anchas (p. ej. depreciación por ejercicio + muchas columnas) */
+.main--report-wide {
+  max-width: min(1680px, 100vw - 2rem);
+}
+
 .report-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -2124,6 +2129,379 @@ select.field__input--select:disabled {
 .report-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.report-field--account .report-field__input {
+  min-width: min(22rem, 100%);
+  max-width: 100%;
+}
+
+.auxiliar-note {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--intimo-gray-light);
+}
+
+.auxiliar-row--opening td {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.auxiliar-row--total td {
+  background: rgba(0, 0, 0, 0.05);
+  font-weight: 600;
+}
+
+/* Libro diario: un bloque por póliza */
+.libro-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.libro-entry {
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+.libro-entry__head {
+  margin-bottom: 0.65rem;
+}
+
+.libro-entry__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--intimo-gray-medium);
+}
+
+.libro-entry__date {
+  font-variant-numeric: tabular-nums;
+}
+
+.libro-entry__folio {
+  font-variant-numeric: tabular-nums;
+  color: var(--intimo-black);
+}
+
+.libro-entry__concept {
+  margin: 0.35rem 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--intimo-gray-dark);
+}
+
+/* Misma grilla en cada asiento: cabeceras alineadas con celdas (Debe/Haber a la derecha). */
+.libro-entry .table-wrap--sticky-head {
+  border: 1px solid var(--intimo-outline);
+  border-radius: var(--radius-sm);
+}
+
+.libro-lines-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.libro-entry .libro-lines-table thead th,
+.libro-entry .libro-lines-table tbody td,
+.libro-entry .libro-lines-table tfoot td {
+  padding: 0.5rem 0.55rem;
+  vertical-align: top;
+}
+
+.libro-entry .table-wrap--sticky-head thead th {
+  padding: 0.5rem 0.55rem;
+  text-align: left;
+}
+
+.libro-entry .libro-lines-table thead th.report-num,
+.libro-entry .libro-lines-table tbody td.report-num,
+.libro-entry .libro-lines-table tfoot td.report-num {
+  text-align: right;
+}
+
+.libro-lines-table th:nth-child(1),
+.libro-lines-table td:nth-child(1) {
+  width: 11%;
+  white-space: nowrap;
+}
+
+.libro-lines-table th:nth-child(2),
+.libro-lines-table td:nth-child(2) {
+  width: 24%;
+}
+
+.libro-lines-table th:nth-child(3),
+.libro-lines-table td:nth-child(3) {
+  width: 39%;
+}
+
+.libro-lines-table th:nth-child(4),
+.libro-lines-table td:nth-child(4) {
+  width: 13%;
+}
+
+.libro-lines-table th:nth-child(5),
+.libro-lines-table td:nth-child(5) {
+  width: 13%;
+}
+
+.libro-lines-table td {
+  min-width: 0;
+}
+
+.libro-cell-concept {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libro-entry__foot td {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.libro-entry__foot td.libro-entry__foot-label {
+  text-align: right;
+  padding-right: 0.75rem;
+  font-weight: 600;
+}
+
+.libro-totals-panel .report-section__title {
+  margin-top: 0;
+}
+
+.libro-total-diff {
+  color: #b71c1c;
+  font-weight: 600;
+}
+
+/* Control de activos (inventario Excel → PostgreSQL) */
+.activos-upload-panel {
+  margin-bottom: 1.25rem;
+  padding: 1.15rem 1.25rem 1.25rem;
+}
+
+.activos-upload-hint {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--intimo-gray-light);
+}
+
+.activos-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.activos-file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--intimo-outline);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--intimo-surface);
+}
+
+.activos-file-label:hover {
+  background: var(--intimo-bg);
+}
+
+.activos-file-input {
+  position: absolute;
+  width: 0.01px;
+  height: 0.01px;
+  opacity: 0;
+  overflow: hidden;
+  z-index: -1;
+}
+
+.activos-file-name {
+  margin: 0.65rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-medium);
+}
+
+.activos-list-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 720px) {
+  .activos-list-head {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+.activos-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: min(100%, 14rem);
+}
+
+.activos-search-field {
+  flex: 1;
+  min-width: min(100%, 220px);
+}
+
+/* Una sola línea por fila: la tabla crece al contenido y se desplaza en horizontal si hace falta */
+.report-section .table-wrap--activos-nowrap,
+.report-section .table-wrap--deprec-nowrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.activos-table,
+.deprec-table {
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+}
+
+.activos-table thead th,
+.activos-table tbody td,
+.deprec-table thead th,
+.deprec-table tbody td {
+  white-space: nowrap;
+  vertical-align: middle;
+  padding-top: 0.42rem;
+  padding-bottom: 0.42rem;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+}
+
+.activos-table .report-num,
+.deprec-table .report-num {
+  white-space: nowrap;
+}
+
+.activos-th-actions,
+.deprec-th-actions {
+  width: 1%;
+  text-align: center;
+}
+
+.activos-actions,
+.deprec-actions {
+  text-align: center;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.activos-btn-edit,
+.deprec-btn-edit {
+  padding: 0.25rem 0.45rem;
+  min-width: auto;
+}
+
+.activos-btn-edit .material-symbols-outlined,
+.deprec-btn-edit .material-symbols-outlined {
+  font-size: 1.125rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.deprec-inegi-page-panel {
+  margin: 0 0 1rem;
+  padding: 1rem 1.15rem 1.1rem;
+  border: 1px solid var(--intimo-outline);
+  border-radius: var(--radius-md);
+  background: var(--intimo-surface);
+}
+
+.deprec-inegi-page-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.deprec-inegi-apply-hint {
+  margin: 0.65rem 0 0;
+}
+
+.deprec-inegi-block {
+  padding: 0.65rem 0 0.35rem;
+  border-top: 1px solid var(--intimo-outline);
+  margin-top: 0.25rem;
+}
+
+.deprec-inegi-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.deprec-inegi-row--apply {
+  margin-top: 0.65rem;
+}
+
+.deprec-inegi-field {
+  margin: 0;
+  min-width: min(100%, 10.5rem);
+}
+
+.deprec-inegi-field--grow {
+  flex: 1;
+  min-width: min(100%, 12rem);
+}
+
+.deprec-inegi-result {
+  margin-top: 0.65rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--intimo-gray-medium);
+}
+
+.deprec-inegi-result--ok {
+  color: var(--intimo-gray-medium);
+}
+
+.deprec-inegi-result--err {
+  color: #b71c1c;
+}
+
+.deprec-ipc-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-light);
+  line-height: 1.4;
+}
+
+.deprec-ipc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.65rem 1rem;
+}
+
+.deprec-th-year {
+  max-width: 5.5rem;
+}
+
+.deprec-ipc-summary {
+  max-width: 11rem;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .report-num--muted {

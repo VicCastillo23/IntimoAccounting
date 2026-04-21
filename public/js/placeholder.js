@@ -3,6 +3,14 @@ import { initAuthShell } from "./auth-shell.js";
 const params = new URLSearchParams(window.location.search);
 if (params.get("m") === "catalogo-cuentas") {
   window.location.replace("/catalogo.html");
+} else if (params.get("m") === "auxiliares-mayor") {
+  window.location.replace("/auxiliar-mayor.html");
+} else if (params.get("m") === "libro-diario") {
+  window.location.replace("/libro-diario.html");
+} else if (params.get("m") === "control-activos") {
+  window.location.replace("/activos.html");
+} else if (params.get("m") === "control-depreciaciones-amortizaciones") {
+  window.location.replace("/amortizaciones.html");
 } else {
   const TITLES = {
     "auxiliares-mayor": "Auxiliares de mayor",
