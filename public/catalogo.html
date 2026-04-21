@@ -130,6 +130,8 @@
               <input id="sat-search" class="search-field__input" type="search" placeholder="Código o descripción…" autocomplete="off" />
             </div>
           </div>
+          <!-- Misma franja vertical que el aviso de filtro en «Cuentas de la empresa» (evita que la tabla salte respecto al panel derecho). -->
+          <div class="catalogo-rubro-slot" aria-hidden="true"></div>
           <div class="table-wrap table-wrap--sticky-head">
             <table class="data-table data-table--dense catalogo-table catalogo-table--sat">
               <thead>
@@ -160,6 +162,7 @@
               <input id="chart-search" class="search-field__input" type="search" placeholder="No. cuenta, nombre, código agrupador…" autocomplete="off" />
             </div>
           </div>
+          <p id="chart-rubro-hint" class="catalogo-rubro-hint" aria-live="polite"></p>
           <div class="table-wrap table-wrap--sticky-head table-wrap--chart-nowrap">
             <table class="data-table data-table--dense catalogo-table catalogo-table--empresa">
               <thead>
@@ -168,7 +171,7 @@
                   <th>Descripción</th>
                   <th>Natur</th>
                   <th>Cód. agrup. SAT</th>
-                  <th></th>
+                  <th class="catalogo-th-actions" scope="col"><span class="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody id="chart-tbody">

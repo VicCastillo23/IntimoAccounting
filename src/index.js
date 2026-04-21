@@ -482,9 +482,22 @@ app.use(
 app.get("/", sendHtmlIfAuthed("index.html"));
 
 async function main() {
-  await ensureDatabaseExistsIfNeeded();
-  await ensureCatalogDevIfNeeded();
-  await initPolizasStore(dataKey);
+  try {
+    await ensureDatabaseExistsIfNeeded();
+    await ensureCatalogDevIfNeeded();
+    await initPolizasStore(dataKey);
+  } catch (err) {
+    const code = err && typeof err === "object" ? err.code : undefined;
+    if (code === "ECONNREFUSED" || code === "ETIMEDOUT") {
+      console.error(
+        "[intimo-accounting] No hay PostgreSQL en la dirección de DATABASE_URL (.env).\n" +
+          "  Arranque local (cluster en .pgdata, puerto 5433): npm run setup:local\n" +
+          "  Migraciones: npm run db:migrate-all\n" +
+          "  O apunta DATABASE_URL a tu instancia (RDS, Docker, etc.)."
+      );
+    }
+    throw err;
+  }
   app.listen(port, "0.0.0.0", () => {
     console.log(`intimo-accounting http://localhost:${port}`);
   });

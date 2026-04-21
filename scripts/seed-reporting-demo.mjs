@@ -7,7 +7,15 @@
  *   npm run db:seed-reporting -- --force   # aunque ya haya pólizas
  */
 import "../src/loadEnv.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { pathToFileURL } from "node:url";
 import pg from "pg";
+
+const __root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const { buildSatDisplayById } = await import(
+  pathToFileURL(path.join(__root, "public", "js", "intimo-account-code.js")).href
+);
 
 const url = String(process.env.DATABASE_URL || "").trim();
 if (!url) {
@@ -27,27 +35,45 @@ async function main() {
       process.exit(0);
     }
 
-    const { rows: satRows } = await client.query(
-      `SELECT id, codigo, descripcion, orden FROM accounting.sat_codigo_agrupador
-       WHERE orden IN (3, 5, 11, 107, 170, 186, 202, 248)
-       ORDER BY orden`
+    const { rows: allSat } = await client.query(
+      `SELECT id, codigo, descripcion, orden, es_seccion FROM accounting.sat_codigo_agrupador ORDER BY orden ASC`
     );
-    if (satRows.length < 6) {
-      throw new Error("Faltan renglones SAT (ejecuta npm run db:migrate-catalog).");
+    const displayById = buildSatDisplayById(allSat);
+    const satAtOrden = (orden) => allSat.find((r) => r.orden === orden);
+    const numCtaForOrden = (orden) => {
+      const sat = satAtOrden(orden);
+      if (!sat) throw new Error(`Falta renglón SAT orden ${orden} (ejecuta npm run db:migrate-catalog).`);
+      const d = displayById.get(Number(sat.id));
+      if (!d?.code) throw new Error(`Sin código Íntimo para SAT orden ${orden}.`);
+      return d.code;
+    };
+    for (const o of [3, 5, 11, 107, 170, 186, 202, 248]) {
+      if (!satAtOrden(o)) {
+        throw new Error(`Falta renglón SAT orden ${o} (ejecuta npm run db:migrate-catalog).`);
+      }
     }
 
-    const satByOrden = Object.fromEntries(satRows.map((r) => [r.orden, r]));
-
     const cuentas = [
-      { num: "1010-001", desc: "Caja general", natur: "D", orden: 3 },
-      { num: "1020-001", desc: "Bancos MX", natur: "D", orden: 5 },
-      { num: "1030-001", desc: "Clientes", natur: "D", orden: 11 },
-      { num: "2010-001", desc: "Proveedores", natur: "A", orden: 107 },
-      { num: "3010-001", desc: "Capital social", natur: "A", orden: 170 },
-      { num: "4010-001", desc: "Ventas gravadas", natur: "A", orden: 186 },
-      { num: "5010-001", desc: "Costo de ventas", natur: "D", orden: 202 },
-      { num: "6010-001", desc: "Gastos de venta", natur: "D", orden: 248 },
+      { desc: "Caja general", natur: "D", orden: 3 },
+      { desc: "Bancos MX", natur: "D", orden: 5 },
+      { desc: "Clientes", natur: "D", orden: 11 },
+      { desc: "Proveedores", natur: "A", orden: 107 },
+      { desc: "Capital social", natur: "A", orden: 170 },
+      { desc: "Ventas gravadas", natur: "A", orden: 186 },
+      { desc: "Costo de ventas", natur: "D", orden: 202 },
+      { desc: "Gastos de venta", natur: "D", orden: 248 },
     ];
+
+    const N = {
+      caja: numCtaForOrden(3),
+      bancos: numCtaForOrden(5),
+      clientes: numCtaForOrden(11),
+      proveedores: numCtaForOrden(107),
+      capital: numCtaForOrden(170),
+      ventas: numCtaForOrden(186),
+      costoVentas: numCtaForOrden(202),
+      gastosVenta: numCtaForOrden(248),
+    };
 
     await client.query("BEGIN");
     await client.query(
@@ -55,13 +81,14 @@ async function main() {
     );
 
     for (const c of cuentas) {
-      const sat = satByOrden[c.orden];
+      const sat = satAtOrden(c.orden);
       if (!sat) continue;
+      const num = numCtaForOrden(c.orden);
       await client.query(
         `INSERT INTO accounting.chart_accounts (num_cta, descripcion, sub_cta_de, nivel, natur, sat_codigo_agrupador_id, activo)
          VALUES ($1, $2, NULL, 1, $3, $4, true)
          ON CONFLICT (num_cta) DO NOTHING`,
-        [c.num, c.desc, c.natur, sat.id]
+        [num, c.desc, c.natur, sat.id]
       );
     }
 
@@ -72,8 +99,8 @@ async function main() {
         return {
           concept: "Venta de contado",
           lines: [
-            { code: "1010-001", name: "Caja general", d: m, c: 0 },
-            { code: "4010-001", name: "Ventas gravadas", d: 0, c: m },
+            { code: N.caja, name: "Caja general", d: m, c: 0 },
+            { code: N.ventas, name: "Ventas gravadas", d: 0, c: m },
           ],
         };
       },
@@ -82,8 +109,8 @@ async function main() {
         return {
           concept: "Venta a crédito",
           lines: [
-            { code: "1030-001", name: "Clientes", d: m, c: 0 },
-            { code: "4010-001", name: "Ventas gravadas", d: 0, c: m },
+            { code: N.clientes, name: "Clientes", d: m, c: 0 },
+            { code: N.ventas, name: "Ventas gravadas", d: 0, c: m },
           ],
         };
       },
@@ -92,8 +119,8 @@ async function main() {
         return {
           concept: "Compra de mercancía",
           lines: [
-            { code: "5010-001", name: "Costo de ventas", d: m, c: 0 },
-            { code: "2010-001", name: "Proveedores", d: 0, c: m },
+            { code: N.costoVentas, name: "Costo de ventas", d: m, c: 0 },
+            { code: N.proveedores, name: "Proveedores", d: 0, c: m },
           ],
         };
       },
@@ -102,8 +129,8 @@ async function main() {
         return {
           concept: "Pago a proveedores",
           lines: [
-            { code: "2010-001", name: "Proveedores", d: m, c: 0 },
-            { code: "1020-001", name: "Bancos MX", d: 0, c: m },
+            { code: N.proveedores, name: "Proveedores", d: m, c: 0 },
+            { code: N.bancos, name: "Bancos MX", d: 0, c: m },
           ],
         };
       },
@@ -112,8 +139,8 @@ async function main() {
         return {
           concept: "Gastos de operación",
           lines: [
-            { code: "6010-001", name: "Gastos de venta", d: m, c: 0 },
-            { code: "1020-001", name: "Bancos MX", d: 0, c: m },
+            { code: N.gastosVenta, name: "Gastos de venta", d: m, c: 0 },
+            { code: N.bancos, name: "Bancos MX", d: 0, c: m },
           ],
         };
       },
@@ -122,8 +149,8 @@ async function main() {
         return {
           concept: "Aportación de capital",
           lines: [
-            { code: "1020-001", name: "Bancos MX", d: m, c: 0 },
-            { code: "3010-001", name: "Capital social", d: 0, c: m },
+            { code: N.bancos, name: "Bancos MX", d: m, c: 0 },
+            { code: N.capital, name: "Capital social", d: 0, c: m },
           ],
         };
       },

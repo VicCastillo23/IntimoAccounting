@@ -1,5 +1,11 @@
 import { initMobileNav } from "./mobile-nav.js";
 import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
+import {
+  buildSatDisplayById,
+  intimoSatCodeTreeDepth,
+  isMainSectionRow,
+  satCodigoDepth,
+} from "./intimo-account-code.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -47,11 +53,15 @@ function escapeAttr(s) {
 }
 
 let satRows = [];
+/** @type {Map<number, { code: string, desc: string }>} */
+let satDisplayById = new Map();
 let chartRows = [];
 let satQ = "";
 let chartQ = "";
 /** @type {number | null} */
 let editingId = null;
+/** SAT (izquierda): id de fila clicada para filtrar cuentas por rubro; null = todas */
+let selectedSatRubroId = null;
 
 function showAlert(msg, kind = "error") {
   const slot = $("#catalog-alert");
@@ -61,11 +71,71 @@ function showAlert(msg, kind = "error") {
     : "";
 }
 
-/** Nivel de anidación: "1" → 0, "1.1" / "65.10" → 1, etc. */
-function satCodigoDepth(codigo) {
-  if (!codigo) return 0;
-  const parts = String(codigo).trim().split(".");
-  return Math.max(0, parts.length - 1);
+function getSatSorted() {
+  return [...satRows].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+}
+
+/**
+ * IDs SAT (hojas con codigo) incluidas en el rubro de la fila clicada.
+ * - Código (ej. 1.1): solo esa fila.
+ * - Sección principal (Activo, Pasivo…): todas las hojas hasta la siguiente sección principal.
+ * - Subsección (Activos circulantes…): hojas hasta la siguiente fila es_seccion.
+ */
+function satIdsForRubroClicked(clickedSatId) {
+  const sorted = getSatSorted();
+  const idx = sorted.findIndex((r) => Number(r.id) === Number(clickedSatId));
+  if (idx === -1) return new Set();
+  const row = sorted[idx];
+
+  if (!row.es_seccion && row.codigo) {
+    return new Set([Number(row.id)]);
+  }
+  if (row.es_seccion && isMainSectionRow(row)) {
+    const ids = new Set();
+    for (let k = idx + 1; k < sorted.length; k++) {
+      const x = sorted[k];
+      if (isMainSectionRow(x)) break;
+      if (!x.es_seccion && x.codigo) ids.add(Number(x.id));
+    }
+    return ids;
+  }
+  if (row.es_seccion) {
+    const ids = new Set();
+    for (let k = idx + 1; k < sorted.length; k++) {
+      const x = sorted[k];
+      if (x.es_seccion) break;
+      if (x.codigo) ids.add(Number(x.id));
+    }
+    return ids;
+  }
+  return new Set();
+}
+
+function toggleSatRubroFilter(satId) {
+  if (selectedSatRubroId != null && Number(selectedSatRubroId) === Number(satId)) {
+    selectedSatRubroId = null;
+  } else {
+    selectedSatRubroId = satId;
+  }
+  renderSat();
+  renderChart();
+}
+
+function updateChartRubroHint() {
+  const hint = $("#chart-rubro-hint");
+  if (!hint) return;
+  if (selectedSatRubroId == null) {
+    hint.textContent = "";
+    hint.removeAttribute("title");
+    hint.classList.remove("catalogo-rubro-hint--on");
+    return;
+  }
+  const disp = satDisplayById.get(Number(selectedSatRubroId));
+  const label = disp ? `${disp.code} — ${disp.desc}` : "Rubro seleccionado";
+  const msg = `Mostrando cuentas del rubro: ${label}. Clic de nuevo en la misma fila SAT para ver todas.`;
+  hint.textContent = msg;
+  hint.setAttribute("title", msg);
+  hint.classList.add("catalogo-rubro-hint--on");
 }
 
 function renderSat() {
@@ -74,9 +144,12 @@ function renderSat() {
   const q = satQ.trim().toLowerCase();
   const rows = satRows.filter((r) => {
     if (!q) return true;
+    const disp = satDisplayById.get(Number(r.id));
+    const ic = (disp?.code || "").toLowerCase();
+    const idesc = (disp?.desc || "").toLowerCase();
     const c = (r.codigo || "").toLowerCase();
     const d = (r.descripcion || "").toLowerCase();
-    return c.includes(q) || d.includes(q);
+    return ic.includes(q) || idesc.includes(q) || c.includes(q) || d.includes(q);
   });
   if (!satRows.length) {
     tbody.innerHTML = `<tr><td colspan="2" class="data-table__empty">Sin datos de código agrupador. En desarrollo el servidor intenta cargarlos al arrancar; si sigue vacío, ejecuta <code>npm run db:migrate-all</code> y reinicia.</td></tr>`;
@@ -86,15 +159,21 @@ function renderSat() {
     tbody.innerHTML = `<tr><td colspan="2" class="data-table__empty">Ningún renglón coincide con la búsqueda.</td></tr>`;
     return;
   }
+
   tbody.innerHTML = rows
     .map((r) => {
-      if (r.es_seccion) {
-        return `<tr class="catalogo-sat-section"><td colspan="2">${escapeHtml(r.descripcion)}</td></tr>`;
-      }
-      const depth = satCodigoDepth(r.codigo);
-      return `<tr class="catalogo-sat-data" style="--sat-depth:${depth}">
-        <td class="catalogo-cod">${escapeHtml(r.codigo || "—")}</td>
-        <td class="catalogo-sat-desc">${escapeHtml(r.descripcion)}</td>
+      const disp = satDisplayById.get(Number(r.id));
+      const code = disp?.code ?? "—";
+      const desc = disp?.desc ?? String(r.descripcion || "");
+      const depth =
+        disp?.code && disp.code !== "—"
+          ? intimoSatCodeTreeDepth(disp.code)
+          : satCodigoDepth(r.codigo);
+      const active =
+        selectedSatRubroId != null && Number(selectedSatRubroId) === Number(r.id) ? " catalogo-sat-data--active" : "";
+      return `<tr class="catalogo-sat-data${active}" data-sat-id="${Number(r.id)}" style="--sat-depth:${depth}">
+        <td class="catalogo-cod"><strong>${escapeHtml(code)}</strong></td>
+        <td class="catalogo-sat-desc">${escapeHtml(desc)}</td>
       </tr>`;
     })
     .join("");
@@ -104,9 +183,15 @@ function naturLabel(n) {
   return n === "A" ? "A — Acreedora" : "D — Deudora";
 }
 
+/** Texto corto en la tabla; el formulario/modal sigue usando `naturLabel`. */
+function naturTableCode(n) {
+  return n === "A" ? "A" : "D";
+}
+
 function renderChart() {
   const tbody = $("#chart-tbody");
   if (!tbody) return;
+  updateChartRubroHint();
   if (!chartRows.length) {
     if (!satRows.length) {
       tbody.innerHTML = `<tr><td colspan="5" class="data-table__empty">Sin datos SAT en la base. Revisa la consola del servidor o ejecuta <code>npm run db:migrate-all</code>.</td></tr>`;
@@ -115,30 +200,53 @@ function renderChart() {
     }
     return;
   }
+  const rubroIds =
+    selectedSatRubroId == null ? null : satIdsForRubroClicked(selectedSatRubroId);
+
   const q = chartQ.trim().toLowerCase();
   const filtered = chartRows.filter((r) => {
+    if (rubroIds != null) {
+      if (rubroIds.size === 0) return false;
+      const sid = r.sat_codigo_agrupador_id;
+      if (sid == null || !rubroIds.has(Number(sid))) return false;
+    }
     if (!q) return true;
     const blob = `${r.num_cta} ${r.descripcion} ${r.codigo_agrupador || ""} ${r.desc_agrupador || ""}`.toLowerCase();
     return blob.includes(q);
   });
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="data-table__empty">Ninguna cuenta coincide con la búsqueda.</td></tr>`;
+    const msg =
+      rubroIds != null && rubroIds.size === 0
+        ? "Este rubro SAT no incluye cuentas agrupadoras (solo títulos). Elija un código concreto."
+        : rubroIds != null
+          ? "Ninguna cuenta de la empresa enlazada a este rubro."
+          : "Ninguna cuenta coincide con la búsqueda.";
+    tbody.innerHTML = `<tr><td colspan="5" class="data-table__empty">${escapeHtml(msg)}</td></tr>`;
     return;
   }
   tbody.innerHTML = filtered
-    .map(
-      (r) => `
+    .map((r) => {
+      const satCell = r.codigo_agrupador
+        ? escapeHtml(`${r.codigo_agrupador} — ${r.desc_agrupador || ""}`)
+        : "—";
+      const satTitle =
+        r.codigo_agrupador != null
+          ? ` title="${escapeAttr(`${r.codigo_agrupador} — ${r.desc_agrupador || ""}`)}"`
+          : "";
+      const descTitle = ` title="${escapeAttr(r.descripcion)}"`;
+      const naturTitle = ` title="${escapeAttr(naturLabel(r.natur))}"`;
+      return `
     <tr data-id="${r.id}" class="catalogo-chart-row">
       <td class="catalogo-cell-num"><strong>${escapeHtml(r.num_cta)}</strong></td>
-      <td class="catalogo-cell-desc">${escapeHtml(r.descripcion)}</td>
-      <td class="catalogo-cell-natur">${escapeHtml(naturLabel(r.natur))}</td>
-      <td class="catalogo-cell-sat">${r.codigo_agrupador ? escapeHtml(`${r.codigo_agrupador} — ${r.desc_agrupador || ""}`) : "—"}</td>
+      <td class="catalogo-cell-desc"${descTitle}>${escapeHtml(r.descripcion)}</td>
+      <td class="catalogo-cell-natur"${naturTitle}>${escapeHtml(naturTableCode(r.natur))}</td>
+      <td class="catalogo-cell-sat"${satTitle}>${satCell}</td>
       <td class="catalogo-actions">
         <button type="button" class="btn btn--text btn--sm" data-edit="${r.id}">Editar</button>
         <button type="button" class="btn btn--text btn--sm catalogo-btn-danger" data-deactivate="${r.id}">Desactivar</button>
       </td>
-    </tr>`
-    )
+    </tr>`;
+    })
     .join("");
 }
 
@@ -199,7 +307,11 @@ function populateSatMinors(majorCode, selectedSatId) {
     minors
       .map((r) => {
         const sel = selectedSatId != null && Number(selectedSatId) === Number(r.id) ? " selected" : "";
-        return `<option value="${escapeAttr(String(r.id))}"${sel}>${escapeHtml(r.codigo)} — ${escapeHtml(r.descripcion)}</option>`;
+        const disp = satDisplayById.get(Number(r.id));
+        const label = disp
+          ? `${escapeHtml(disp.code)} — ${escapeHtml(disp.desc)}`
+          : `${escapeHtml(r.codigo)} — ${escapeHtml(r.descripcion)}`;
+        return `<option value="${escapeAttr(String(r.id))}"${sel}>${label}</option>`;
       })
       .join("");
   if (selectedSatId != null) {
@@ -213,6 +325,7 @@ async function loadSat() {
     res = await apiFetch("/api/catalog/sat");
   } catch {
     satRows = [];
+    satDisplayById = new Map();
     showAlert("Error de red al cargar el código agrupador.");
     renderSat();
     return;
@@ -229,18 +342,21 @@ async function loadSat() {
   } catch (e) {
     if (e.message === "Sesión expirada.") return;
     satRows = [];
+    satDisplayById = new Map();
     showAlert(e instanceof Error ? e.message : String(e));
     renderSat();
     return;
   }
   if (!res.ok) {
     satRows = [];
+    satDisplayById = new Map();
     showAlert(j.message || "No se pudo cargar el código agrupador.");
     renderSat();
     return;
   }
   showAlert("");
   satRows = j.data || [];
+  satDisplayById = buildSatDisplayById(satRows);
   renderSat();
   populateSatMajors();
   populateSatMinors($("#acc-sat-major")?.value || "", null);
@@ -437,6 +553,14 @@ async function deactivateAccount(id) {
 }
 
 function wireUi() {
+  document.querySelector(".catalogo-panel--sat .table-wrap")?.addEventListener("click", (e) => {
+    const tr = e.target.closest("tr.catalogo-sat-data");
+    if (!tr?.dataset?.satId) return;
+    const id = Number(tr.dataset.satId);
+    if (!Number.isFinite(id)) return;
+    toggleSatRubroFilter(id);
+  });
+
   $("#sat-search")?.addEventListener("input", (e) => {
     satQ = e.target.value;
     renderSat();
@@ -474,8 +598,10 @@ function wireUi() {
   $("#chart-tbody")?.addEventListener("click", (e) => {
     const ed = e.target.closest("[data-edit]");
     if (ed) {
+      e.preventDefault();
+      e.stopPropagation();
       const id = Number(ed.getAttribute("data-edit"));
-      const r = chartRows.find((x) => x.id === id);
+      const r = chartRows.find((x) => Number(x.id) === id);
       if (r) {
         fillFormFromRow(r);
         openModal(true);
@@ -484,6 +610,8 @@ function wireUi() {
     }
     const de = e.target.closest("[data-deactivate]");
     if (de) {
+      e.preventDefault();
+      e.stopPropagation();
       const id = Number(de.getAttribute("data-deactivate"));
       void deactivateAccount(id);
     }

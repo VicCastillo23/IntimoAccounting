@@ -147,8 +147,14 @@
     font-size: 11pt !important;
   }
 
+  /* Secciones que en pantalla son solo título + gráfico (sin tablas útiles al imprimir). */
+  .report-hide-print {
+    display: none !important;
+  }
+
+  /* Reportería: por si un gráfico queda fuera de .report-hide-print. */
   .report-chart-wrap {
-    max-height: 220px !important;
+    display: none !important;
   }
 
   .data-table {
