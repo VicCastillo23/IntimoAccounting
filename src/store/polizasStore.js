@@ -307,8 +307,29 @@ function yearFromIsoDate(iso) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {Record<string, unknown>}
+ */
+function normalizeNewPolizaSourceRef(raw) {
+  const fallback = { kind: "manual", label: null, tabletSync: false };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fallback;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  if (o.kind === "pos_day") {
+    const d = String(o.date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return fallback;
+    const ticketCount = Number(o.ticketCount);
+    return {
+      kind: "pos_day",
+      date: d,
+      ticketCount: Number.isFinite(ticketCount) ? ticketCount : 0,
+    };
+  }
+  return fallback;
+}
+
+/**
  * Crea una póliza nueva (archivo local o PostgreSQL).
- * @param {{ type: string, concept: string, polizaDate?: string, lines: Array<Record<string, unknown>> }} input
+ * @param {{ type: string, concept: string, polizaDate?: string, lines: Array<Record<string, unknown>>, sourceRef?: unknown }} input
  */
 export async function saveNewPoliza(input) {
   const type = String(input.type || "").toUpperCase();
@@ -316,7 +337,7 @@ export async function saveNewPoliza(input) {
   const lines = input.lines || [];
   const id = `pol-${Date.now()}`;
   const date = isoDateOrToday(input.polizaDate);
-  const sourceRef = { kind: "manual", label: null, tabletSync: false };
+  const sourceRef = normalizeNewPolizaSourceRef(input.sourceRef);
   const y = yearFromIsoDate(date) ?? new Date().getFullYear();
 
   if (!usePg()) {

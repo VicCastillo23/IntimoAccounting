@@ -29,7 +29,7 @@ import {
 import { checkDb, ensureDatabaseExistsIfNeeded } from "./db/pool.js";
 import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
 import { getLedgerAuxiliarMayor, getReportsDashboard } from "./store/reportsStore.js";
-import { upsertPosPurchaseOrder } from "./store/posIngestStore.js";
+import { upsertPosPurchaseOrder, buildPosDayPolizaDraft } from "./store/posIngestStore.js";
 import {
   buildActivosTemplateXlsx,
   importActivosFromExcelBuffer,
@@ -163,6 +163,36 @@ app.get("/api/polizas/next-folio", requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: e instanceof Error ? e.message : "Error al obtener folio",
+    });
+  }
+});
+
+/** Borrador de póliza INGRESOS desde tickets del día en pos.purchase_orders (requiere PostgreSQL). */
+app.get("/api/pos/poliza-draft", requireAuth, async (req, res) => {
+  const date = String(req.query.date || "").slice(0, 10);
+  try {
+    const out = await buildPosDayPolizaDraft(date);
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Se requiere PostgreSQL (DATABASE_URL) y tablas POS para el borrador.",
+          code: out.reason,
+        });
+      }
+      if (out.reason === "invalid_date") {
+        return res.status(400).json({
+          success: false,
+          message: "Indica date=YYYY-MM-DD (día de las ventas POS).",
+        });
+      }
+      return res.status(400).json({ success: false, message: "No se pudo armar el borrador." });
+    }
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al generar borrador POS",
     });
   }
 });
@@ -727,7 +757,7 @@ app.post("/api/polizas", requireAuth, async (req, res) => {
     });
   }
 
-  const { type, concept, lines, polizaDate } = req.body || {};
+  const { type, concept, lines, polizaDate, sourceRef } = req.body || {};
   const typeU = String(type || "").toUpperCase();
   if (!POLIZA_TYPES.has(typeU)) {
     return res.status(400).json({
@@ -764,6 +794,7 @@ app.post("/api/polizas", requireAuth, async (req, res) => {
       concept: String(concept).trim(),
       polizaDate: dateStr,
       lines: lines.map(normPolizaLine),
+      sourceRef,
     });
     res.status(201).json({ success: true, data: row });
   } catch (e) {

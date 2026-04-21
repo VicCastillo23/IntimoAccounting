@@ -170,3 +170,152 @@ export async function sumPosPurchasesInRange(range) {
     totalMxn: rows[0]?.total_mxn ?? 0,
   };
 }
+
+const POS_POLIZA_SOURCES = ["intimo_pos", "intimo_pos_split"];
+
+function roundMoney(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  return Math.round(x * 100) / 100;
+}
+
+/**
+ * Borrador de póliza INGRESOS desde tickets POS del día (pos.purchase_orders).
+ * Un cargo por ticket (efectivo/ventas) y abonos consolidados a ventas + IVA.
+ *
+ * Cuentas por defecto configurables vía .env (ver .env.example).
+ *
+ * @param {string} dateStr YYYY-MM-DD (día calendario según servidor)
+ * @returns {Promise<{ ok: true, date: string, ticketCount: number, subtotal: number, tax: number, total: number, type: string, concept: string, lines: Array<Record<string, unknown>>, sourceRef: { kind: string, date: string, ticketCount: number } } | { ok: false, reason: string }>}
+ */
+export async function buildPosDayPolizaDraft(dateStr) {
+  const pool = getPool();
+  if (!pool) return { ok: false, reason: "no_database" };
+
+  const date = String(dateStr || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, reason: "invalid_date" };
+  }
+
+  const cashCode = String(process.env.POLIZA_POS_CASH_ACCOUNT_CODE || "101-01").trim() || "101-01";
+  const cashName = String(
+    process.env.POLIZA_POS_CASH_ACCOUNT_NAME || "Caja / efectivo ventas"
+  ).trim();
+  const salesCode = String(process.env.POLIZA_POS_SALES_ACCOUNT_CODE || "401-01").trim() || "401-01";
+  const salesName = String(process.env.POLIZA_POS_SALES_ACCOUNT_NAME || "Ventas").trim();
+  const ivaCode = String(process.env.POLIZA_POS_IVA_ACCOUNT_CODE || "208-01").trim() || "208-01";
+  const ivaName = String(process.env.POLIZA_POS_IVA_ACCOUNT_NAME || "IVA trasladado").trim();
+
+  const { rows: aggRows } = await pool.query(
+    `
+    SELECT
+      COUNT(*)::int AS c,
+      COALESCE(SUM(subtotal), 0)::float8 AS subtotal,
+      COALESCE(SUM(tax), 0)::float8 AS tax,
+      COALESCE(SUM(total), 0)::float8 AS total
+    FROM pos.purchase_orders
+    WHERE source = ANY($1::text[])
+      AND occurred_at::date = $2::date
+    `,
+    [POS_POLIZA_SOURCES, date]
+  );
+
+  const ticketCount = aggRows[0]?.c ?? 0;
+  if (ticketCount === 0) {
+    return {
+      ok: true,
+      date,
+      ticketCount: 0,
+      subtotal: 0,
+      tax: 0,
+      total: 0,
+      type: "INGRESOS",
+      concept: "",
+      lines: [],
+      sourceRef: { kind: "pos_day", date, ticketCount: 0 },
+    };
+  }
+
+  const subtotalSum = roundMoney(aggRows[0]?.subtotal ?? 0);
+  const taxSum = roundMoney(aggRows[0]?.tax ?? 0);
+  const totalSum = roundMoney(aggRows[0]?.total ?? 0);
+
+  const { rows: detail } = await pool.query(
+    `
+    SELECT external_id, subtotal::float8 AS subtotal, tax::float8 AS tax, total::float8 AS total
+    FROM pos.purchase_orders
+    WHERE source = ANY($1::text[])
+      AND occurred_at::date = $2::date
+    ORDER BY occurred_at ASC, id ASC
+    `,
+    [POS_POLIZA_SOURCES, date]
+  );
+
+  /** @type {Array<Record<string, unknown>>} */
+  const lines = [];
+  for (const r of detail) {
+    const tot = roundMoney(r.total);
+    lines.push({
+      ticketId: String(r.external_id || "").trim(),
+      accountCode: cashCode,
+      accountName: cashName,
+      lineConcept: "Venta POS (ticket)",
+      invoiceUrl: "",
+      fxCurrency: "MX",
+      depto: "ADMINISTRACION",
+      debit: tot,
+      credit: 0,
+    });
+  }
+
+  lines.push({
+    ticketId: "",
+    accountCode: salesCode,
+    accountName: salesName,
+    lineConcept: "Ventas del día (consolidado POS)",
+    invoiceUrl: "",
+    fxCurrency: "MX",
+    depto: "ADMINISTRACION",
+    debit: 0,
+    credit: subtotalSum,
+  });
+
+  if (taxSum > 0.005) {
+    lines.push({
+      ticketId: "",
+      accountCode: ivaCode,
+      accountName: ivaName,
+      lineConcept: "IVA trasladado (POS)",
+      invoiceUrl: "",
+      fxCurrency: "MX",
+      depto: "ADMINISTRACION",
+      debit: 0,
+      credit: taxSum,
+    });
+  }
+
+  const sumD = roundMoney(lines.reduce((s, l) => s + Number(l.debit || 0), 0));
+  const sumC = roundMoney(lines.reduce((s, l) => s + Number(l.credit || 0), 0));
+  const imbalance = roundMoney(sumD - sumC);
+  if (Math.abs(imbalance) > 0.005) {
+    const salesLine = lines.find((l) => String(l.accountCode) === salesCode && Number(l.credit) > 0);
+    if (salesLine) {
+      salesLine.credit = roundMoney(Number(salesLine.credit) + imbalance);
+    }
+  }
+
+  const concept = `Cierre ventas del día ${date} — ${ticketCount} ticket(s) POS (importe total $${totalSum.toFixed(2)} MXN)`;
+
+  return {
+    ok: true,
+    date,
+    ticketCount,
+    subtotal: subtotalSum,
+    tax: taxSum,
+    total: totalSum,
+    type: "INGRESOS",
+    concept,
+    lines,
+    sourceRef: { kind: "pos_day", date, ticketCount },
+  };
+}

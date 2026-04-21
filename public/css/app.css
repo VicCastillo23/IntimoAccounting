@@ -1235,6 +1235,32 @@ body.modal-poliza-open {
   margin-bottom: 1rem;
 }
 
+.toolbar-pos-draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  background: #fafafa;
+  border: 1px solid var(--intimo-bg);
+  border-radius: var(--radius-sm);
+}
+
+.toolbar-pos-draft__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--intimo-gray-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.toolbar-pos-draft__date {
+  max-width: 11rem;
+  min-height: 2rem;
+  font-size: 0.875rem;
+}
+
 .polizas-list-table-wrap {
   max-height: min(38vh, 480px);
   overflow: auto;

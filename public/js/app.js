@@ -282,6 +282,9 @@ let viewerMode = "empty";
 /** @type {string | null} */
 let editingPolizaId = null;
 
+/** Si la póliza en edición viene del borrador POS, se envía al guardar como source_ref. */
+let posDraftSourceRef = null;
+
 /** Ejercicio fiscal activo (sesión). */
 let sessionFiscalYear = null;
 
@@ -483,6 +486,7 @@ function getMockTransferenciaTemplate() {
 
 function applyTemplateForType(type) {
   if (editingPolizaId) return;
+  posDraftSourceRef = null;
   const t = String(type || "").toUpperCase();
   let tpl;
   if (t === "EGRESOS") tpl = getMockEgresosTemplate();
@@ -500,6 +504,10 @@ function applyTemplateForType(type) {
 function sourceLabel(ref) {
   if (!ref || !ref.kind) return "—";
   if (ref.kind === "manual") return "Manual";
+  if (ref.kind === "pos_day" && ref.date) {
+    const n = ref.ticketCount != null ? ` · ${ref.ticketCount} ticket(s)` : "";
+    return `Ventas POS · ${ref.date}${n}`;
+  }
   const map = {
     order_summary: "Orden (resumen)",
     inventory_movement: "Inventario",
@@ -778,6 +786,7 @@ function renderCreateLinesTable() {
 
 async function openCreate() {
   editingPolizaId = null;
+  posDraftSourceRef = null;
   const title = document.getElementById("modal-create-poliza-title");
   if (title) title.textContent = "Nueva póliza";
   const tpl = getMockNewPolizaTemplate();
@@ -794,9 +803,55 @@ async function openCreate() {
   openCreateModal();
 }
 
+async function openPosPolizaDraft() {
+  const d = $("#pos-draft-date")?.value?.trim();
+  if (!d) {
+    showAlert("Elige el día de las ventas POS.");
+    return;
+  }
+  if (sessionFiscalYear != null && !d.startsWith(`${sessionFiscalYear}-`)) {
+    showAlert("El día debe pertenecer al ejercicio fiscal activo.");
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/pos/poliza-draft?date=${encodeURIComponent(d)}`);
+    await ensureAuthed(res);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Error al cargar borrador POS");
+    const data = json.data;
+    if (!data || !data.ticketCount) {
+      showAlert("No hay tickets POS registrados para esa fecha.");
+      return;
+    }
+    posDraftSourceRef = data.sourceRef || null;
+    editingPolizaId = null;
+    const title = document.getElementById("modal-create-poliza-title");
+    if (title) title.textContent = "Nueva póliza";
+    createLines.length = 0;
+    (data.lines || []).forEach((line) => createLines.push(normLine({ ...line })));
+    renderCreateLinesTable();
+    updateCreateTotalsBar();
+    const sel = $("#create-type");
+    if (sel) sel.value = data.type || "INGRESOS";
+    const conc = $("#create-concept");
+    if (conc) conc.value = data.concept || "";
+    const cd = $("#create-date");
+    if (cd) {
+      setCreateDateBounds();
+      cd.value = d;
+    }
+    showAlert("");
+    await refreshCreateFolioPreview();
+    openCreateModal();
+  } catch (err) {
+    if (err.message !== "Sesión expirada.") showAlert(err.message || "No se pudo generar el borrador.");
+  }
+}
+
 async function openEditPoliza(p) {
   if (!p) return;
   editingPolizaId = p.id;
+  posDraftSourceRef = null;
   const title = document.getElementById("modal-create-poliza-title");
   if (title) title.textContent = "Editar póliza";
   createLines.length = 0;
@@ -832,6 +887,12 @@ async function load() {
   if (typeof json.fiscalYear === "number") sessionFiscalYear = json.fiscalYear;
   polizas = json.data || [];
   setCreateDateBounds();
+  const pdd = $("#pos-draft-date");
+  if (pdd && !pdd.value) {
+    pdd.min = sessionFiscalYear != null ? `${sessionFiscalYear}-01-01` : "";
+    pdd.max = sessionFiscalYear != null ? `${sessionFiscalYear}-12-31` : "";
+    pdd.value = defaultDateInFiscalYear();
+  }
   renderTable();
   if (selectedId && !polizas.find((p) => p.id === selectedId)) {
     selectedId = null;
@@ -880,6 +941,7 @@ function wireUi() {
   });
 
   $("#btn-new-poliza").addEventListener("click", () => openCreate());
+  $("#btn-pos-poliza-draft")?.addEventListener("click", () => void openPosPolizaDraft());
 
   $("#poliza-viewer-root").addEventListener("click", (e) => {
     if (e.target.closest("#btn-new-from-view")) {
@@ -1146,7 +1208,9 @@ async function savePoliza() {
   const btn = $("#btn-save-poliza");
   if (btn) btn.disabled = true;
   const editing = editingPolizaId;
-  const body = JSON.stringify({ type, concept, polizaDate, lines: validLines });
+  const payload = { type, concept, polizaDate, lines: validLines };
+  if (!editing && posDraftSourceRef) payload.sourceRef = posDraftSourceRef;
+  const body = JSON.stringify(payload);
   try {
     const res = await apiFetch(editing ? `/api/polizas/${encodeURIComponent(editing)}` : "/api/polizas", {
       method: editing ? "PATCH" : "POST",
@@ -1156,6 +1220,7 @@ async function savePoliza() {
     await ensureAuthed(res);
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || "No se pudo guardar");
+    posDraftSourceRef = null;
     if (editing) {
       polizas = polizas.map((row) => (row.id === json.data.id ? json.data : row));
     } else {

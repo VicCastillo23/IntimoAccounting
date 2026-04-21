@@ -112,9 +112,9 @@
       <header class="main__header">
         <h1 class="main__h1">Pólizas contables</h1>
         <p class="main__lead">
-          Cada <strong>renglón</strong> representa un <strong>ticket de venta</strong> del día (más líneas de resumen contable si aplica).
-          Si el ticket está facturado, podrás abrir el <strong>enlace de descarga</strong> del CFDI/PDF. Al <strong>cierre del día</strong>,
-          esta póliza se podrá llenar automáticamente desde la base de datos de la tablet / POS.
+          Cada <strong>renglón</strong> puede representar un <strong>ticket de venta</strong> del día (más líneas de resumen contable).
+          Con los tickets ya enviados al servidor (ingesta POS), usa <strong>Prellenar desde POS</strong> eligiendo el día.
+          Si el ticket está facturado, podrás añadir el <strong>enlace</strong> del CFDI/PDF en cada línea.
         </p>
       </header>
 
@@ -141,6 +141,14 @@
               <button type="button" class="chip" data-filter="INGRESOS">Ingresos</button>
               <button type="button" class="chip" data-filter="EGRESOS">Egresos</button>
               <button type="button" class="chip" data-filter="TRANSFERENCIA">Transferencia</button>
+            </div>
+            <div class="toolbar-pos-draft" role="group" aria-label="Borrador desde ventas POS">
+              <label class="toolbar-pos-draft__label" for="pos-draft-date">Día ventas POS</label>
+              <input type="date" class="field__input toolbar-pos-draft__date" id="pos-draft-date" />
+              <button type="button" class="btn btn--ghost btn--sm" id="btn-pos-poliza-draft">
+                <span class="material-symbols-outlined btn__icon" aria-hidden="true">point_of_sale</span>
+                Prellenar desde POS
+              </button>
             </div>
             <button type="button" class="btn btn--primary" id="btn-new-poliza">
               <span class="material-symbols-outlined btn__icon" aria-hidden="true">add</span>
@@ -230,7 +238,9 @@
           Un renglón por ticket de venta; líneas de resumen (ventas/IVA) sin ticket. Debe = haber.
           Cuentas que empiezan con <strong>1</strong> cargan importe en <strong>Debe</strong>; con <strong>2</strong> o <strong>4</strong> en <strong>Haber</strong> (al elegir cuenta o al salir del importe).
         </p>
-        <p class="poliza-mock-hint">Plantilla con tickets del día (demo); edita enlaces de factura y moneda antes de guardar.</p>
+        <p class="poliza-mock-hint">
+          Usa <strong>Prellenar desde POS</strong> en la barra con el día de las ventas, o la plantilla demo al elegir tipo Ingresos. Revisa cuentas y facturas antes de guardar.
+        </p>
         <div class="poliza-lines-wrap poliza-lines-wrap--modal">
           <table class="poliza-lines-table poliza-lines-table--modal">
             <colgroup>
