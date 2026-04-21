@@ -27,6 +27,7 @@ import {
 import { checkDb, ensureDatabaseExistsIfNeeded } from "./db/pool.js";
 import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
 import { getReportsDashboard } from "./store/reportsStore.js";
+import { upsertPosPurchaseOrder } from "./store/posIngestStore.js";
 import { getBrandingForApi } from "./config/branding.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,23 @@ initUsersStore(dataKey);
 
 app.use(getSessionMiddleware(session));
 app.use(express.json({ limit: "512kb" }));
+
+/** Ingesta de tickets de venta desde IntimoCoffeeApp (API key, sin sesión web). */
+function requirePosIngestAuth(req, res, next) {
+  const secret = String(process.env.POS_INGEST_SECRET || "").trim();
+  if (!secret) {
+    return res.status(503).json({
+      success: false,
+      message: "Ingesta POS deshabilitada: define POS_INGEST_SECRET en el servidor.",
+    });
+  }
+  const auth = String(req.headers.authorization || "");
+  const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  if (token !== secret) {
+    return res.status(401).json({ success: false, message: "API key POS inválida." });
+  }
+  next();
+}
 
 function totals(lines) {
   const debit = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
@@ -192,6 +210,30 @@ app.patch("/api/catalog/accounts/:id", requireAuth, async (req, res) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error al actualizar";
     res.status(400).json({ success: false, message: msg });
+  }
+});
+
+app.post("/api/pos/purchase-orders", requirePosIngestAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const row = await upsertPosPurchaseOrder({
+      externalId: b.externalId,
+      source: b.source,
+      occurredAt: b.occurredAt,
+      currency: b.currency,
+      subtotal: b.subtotal,
+      tax: b.tax,
+      total: b.total,
+      loyaltyCustomerId: b.loyaltyCustomerId,
+      lines: b.lines,
+      rawPayload: b.rawPayload,
+    });
+    res.status(201).json({ success: true, data: row });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al guardar ticket POS";
+    const code =
+      e && typeof e === "object" && "code" in e && e.code === "BAD_REQUEST" ? 400 : 500;
+    res.status(code).json({ success: false, message: msg });
   }
 });
 

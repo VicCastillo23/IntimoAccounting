@@ -7,7 +7,7 @@ import {
   setMeta,
   wireToolbar,
 } from "./reports-core.js";
-import { renderActividad } from "./reports-renders.js";
+import { renderActividad, renderPosSales } from "./reports-renders.js";
 
 let chart;
 
@@ -36,6 +36,7 @@ async function load() {
   const d = await loadDashboard();
   if (!d) return;
   setMeta(d);
+  renderPosSales(d);
   renderActividad(d);
   runChartWithStagger("report-chart-actividad", () => renderChart(d));
 }

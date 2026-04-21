@@ -77,6 +77,12 @@
       </div>
       <div id="report-alert" class="report-alert-slot"></div>
 
+      <section class="report-section panel report-pos-sales" aria-label="Ventas POS">
+        <h2 class="report-section__title">Tickets de caja (IntimoCoffee → contabilidad)</h2>
+        <p class="main__lead">Registros enviados al servidor al cobrar (tabla <code>pos.purchase_orders</code>). Sirven como auxiliar de ventas; no sustituyen pólizas.</p>
+        <div id="report-pos-body" class="report-pos-sales__body"></div>
+      </section>
+
       <section class="report-section panel">
         <h2 class="report-section__title">Tendencia del resultado del periodo</h2>
         <div class="report-chart-wrap"><canvas id="report-chart-actividad"></canvas></div>

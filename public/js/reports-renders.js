@@ -86,6 +86,23 @@ export function renderActividad(d) {
   `;
 }
 
+export function renderPosSales(d) {
+  const el = document.getElementById("report-pos-body");
+  if (!el) return;
+  const ps = d.posSales;
+  if (!ps) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = `
+    <p class="report-pos-sales__line">
+      <strong>${Number(ps.ticketCount) || 0}</strong> ticket(s) en el periodo ·
+      Total registrado en POS: <strong>${money(ps.totalMxn)}</strong>
+    </p>
+    <p class="report-pos-sales__note">${escapeHtml(ps.note || "")}</p>
+  `;
+}
+
 export function renderCambiosSituacion(d) {
   const tbody = $("#report-tbody-cambios");
   if (!tbody) return;

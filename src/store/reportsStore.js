@@ -1,4 +1,5 @@
 import { getPool } from "../db/pool.js";
+import { sumPosPurchasesInRange } from "./posIngestStore.js";
 
 /** @typedef {'ACTIVO'|'PASIVO'|'CAPITAL'|'INGRESOS'|'COSTOS'|'GASTOS'|'OTRO'} SatBucket */
 
@@ -252,6 +253,8 @@ export async function getReportsDashboard(range) {
       [from, to]
     );
 
+    const posSales = await sumPosPurchasesInRange({ from, to });
+
     return {
       ok: true,
       range: { from, to, asOf, openingDate },
@@ -280,6 +283,22 @@ export async function getReportsDashboard(range) {
       cambiosSituacionFinanciera,
       variacionCapitalContable,
       estadoFlujoEfectivo,
+      posSales:
+        posSales.ok === true
+          ? {
+              ticketCount: posSales.ticketCount,
+              totalMxn: posSales.totalMxn,
+              note:
+                "Ventas capturadas desde IntimoCoffeeApp al cobrar (tabla pos.purchase_orders). Distinto de ingresos por pólizas contables.",
+            }
+          : {
+              ticketCount: 0,
+              totalMxn: 0,
+              note:
+                posSales.reason === "no_database"
+                  ? "Sin PostgreSQL: no hay acumulado de tickets POS."
+                  : "Rango no válido para tickets POS.",
+            },
     };
   } finally {
     client.release();
