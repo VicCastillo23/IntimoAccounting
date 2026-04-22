@@ -72,42 +72,11 @@
               <span class="material-symbols-outlined search-field__icon" aria-hidden="true">search</span>
               <input id="deprec-q" class="search-field__input" type="search" placeholder="Buscar nombre, categoría o código…" autocomplete="off" />
             </label>
+            <button type="button" class="btn btn--ghost btn--sm" id="btn-inpc-open" aria-label="Consultar INPC en INEGI y calcular factor">Actualizar INPC</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-deprec-sync-activos">Desde inventario de activos</button>
-            <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-toggle" aria-expanded="false" aria-controls="inegi-panel-wrap">Actualizar INPC</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-deprec-add">Nuevo registro</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-deprec-reload">Actualizar lista</button>
           </div>
-        </div>
-        <div id="inegi-panel-wrap" class="deprec-inegi-page-panel" hidden>
-          <h3 class="deprec-inegi-page-title">INPC (INEGI)</h3>
-          <p class="deprec-ipc-hint">
-            Serie mensual indicador <strong>628194</strong> (INPC, fuente <strong>BIE</strong>). El servidor calcula <strong>INPC fin ÷ INPC inicio</strong> (6 decimales).
-            Token en <code>.env</code>: <code>INEGI_BIE_TOKEN</code>. Ese token debe incluir acceso al <strong>BIE</strong> (no basta con BISE): registro en
-            <a href="https://www.inegi.org.mx/servicios/api_indicadores.html" target="_blank" rel="noopener">API del Banco de Indicadores</a>.
-            Si INEGI devuelve «no se encontraron resultados», revisa permisos del token o variables opcionales <code>INEGI_INPC_INDICADOR</code>, <code>INEGI_BIE_GEO_AREA</code>.
-          </p>
-          <div class="deprec-inegi-row">
-            <label class="field deprec-inegi-field">
-              <span class="field__label">Mes INPC inicio</span>
-              <input type="month" class="field__input" id="inegi-from" />
-            </label>
-            <label class="field deprec-inegi-field">
-              <span class="field__label">Mes INPC fin</span>
-              <input type="month" class="field__input" id="inegi-to" />
-            </label>
-            <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-calc">Calcular factor</button>
-          </div>
-          <div id="inegi-result" class="deprec-inegi-result" aria-live="polite"></div>
-          <div id="inegi-apply-wrap" class="deprec-inegi-row deprec-inegi-row--apply" hidden>
-            <label class="field deprec-inegi-field deprec-inegi-field--grow">
-              <span class="field__label">Aplicar a IPC del año</span>
-              <select class="field__input field__input--select" id="inegi-apply-year"></select>
-            </label>
-            <button type="button" class="btn btn--sm btn--ghost" id="btn-inegi-apply" disabled>Poner en campo IPC</button>
-          </div>
-          <p id="inegi-apply-hint" class="deprec-ipc-hint deprec-inegi-apply-hint">
-            Abre <strong>Nuevo registro</strong> o <strong>Editar</strong> una fila para habilitar «Poner en campo IPC» y escribir el factor en el formulario.
-          </p>
         </div>
         <div class="table-wrap table-wrap--sticky-head table-wrap--deprec-nowrap">
           <table class="data-table data-table--dense deprec-table">
@@ -191,7 +160,7 @@
           </label>
           <div class="field field--span deprec-ipc-block">
             <span class="field__label">Factor IPC por ejercicio (opcional; vacío = 1)</span>
-            <p class="deprec-ipc-hint">Se aplican a los años de la tabla según el ejercicio fiscal activo.</p>
+            <p class="deprec-ipc-hint">Se aplican a los años de la tabla según el ejercicio fiscal activo. Usa el botón <strong>Actualizar INPC</strong> en la barra de herramientas encima de la lista para consultar INEGI y calcular el factor.</p>
             <div id="deprec-ipc-inputs" class="deprec-ipc-grid"></div>
           </div>
           <label class="field field--span">
@@ -203,6 +172,57 @@
       </div>
       <div class="modal__footer">
         <button type="button" class="btn btn--primary" id="btn-deprec-modal-save">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop modal-backdrop--inpc" id="modal-inpc" hidden aria-hidden="true">
+    <div
+      class="modal modal--account modal--inpc"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-inpc-title"
+      aria-describedby="modal-inpc-desc"
+      tabindex="-1"
+    >
+      <div class="modal__header modal__header--account">
+        <div class="modal__header-text">
+          <h2 class="modal__title" id="modal-inpc-title">INPC (INEGI)</h2>
+          <p class="modal__subtitle" id="modal-inpc-subtitle">Factor INPC fin ÷ inicio</p>
+        </div>
+        <button type="button" class="btn btn--text" id="btn-inpc-modal-close">Cerrar</button>
+      </div>
+      <div class="modal__body">
+        <p id="modal-inpc-desc" class="deprec-ipc-hint modal-inpc__intro">
+          Serie mensual indicador <strong>628194</strong> (INPC, fuente <strong>BIE</strong>). El servidor calcula <strong>INPC fin ÷ INPC inicio</strong> (6 decimales).
+          Token en <code>.env</code>: <code>INEGI_BIE_TOKEN</code>. Ese token debe incluir acceso al <strong>BIE</strong> (no basta con BISE): registro en
+          <a href="https://www.inegi.org.mx/servicios/api_indicadores.html" target="_blank" rel="noopener">API del Banco de Indicadores</a>.
+          Si INEGI devuelve «no se encontraron resultados», revisa permisos del token o variables opcionales <code>INEGI_INPC_INDICADOR</code>, <code>INEGI_BIE_GEO_AREA</code>.
+        </p>
+        <div id="deprec-inegi-block" class="deprec-inegi-block">
+          <div class="deprec-inegi-row">
+            <label class="field deprec-inegi-field">
+              <span class="field__label">Mes INPC inicio</span>
+              <input type="month" class="field__input" id="inegi-from" />
+            </label>
+            <label class="field deprec-inegi-field">
+              <span class="field__label">Mes INPC fin</span>
+              <input type="month" class="field__input" id="inegi-to" />
+            </label>
+            <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-calc">Calcular factor</button>
+          </div>
+          <div id="inegi-result" class="deprec-inegi-result" aria-live="polite"></div>
+          <div id="inegi-apply-wrap" class="deprec-inegi-row deprec-inegi-row--apply" hidden>
+            <label class="field deprec-inegi-field deprec-inegi-field--grow">
+              <span class="field__label">Aplicar a IPC del año</span>
+              <select class="field__input field__input--select" id="inegi-apply-year"></select>
+            </label>
+            <button type="button" class="btn btn--sm btn--ghost" id="btn-inegi-apply" disabled>Poner en campo IPC</button>
+          </div>
+          <p id="inegi-apply-hint" class="deprec-ipc-hint deprec-inegi-apply-hint">
+            Abre <strong>Nuevo registro</strong> o <strong>Editar</strong> una fila para habilitar «Poner en campo IPC» y escribir el factor en el formulario.
+          </p>
+        </div>
       </div>
     </div>
   </div>

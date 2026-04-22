@@ -152,9 +152,18 @@
     display: none !important;
   }
 
-  /* Reportería: por si un gráfico queda fuera de .report-hide-print. */
-  .report-chart-wrap {
+  /* Reportería: gráficos (Chart.js) no deben aparecer en papel ni PDF. */
+  .report-chart-wrap,
+  .main--report canvas {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
   }
 
   .data-table {

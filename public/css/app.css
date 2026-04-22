@@ -651,6 +651,10 @@ body.nav-drawer-open .nav-backdrop {
   padding: 1rem;
 }
 
+.modal-backdrop--inpc {
+  z-index: 620;
+}
+
 .modal {
   background: var(--intimo-surface);
   border-radius: var(--radius-md);
@@ -2444,18 +2448,20 @@ select.field__input--select:disabled {
   vertical-align: middle;
 }
 
-.deprec-inegi-page-panel {
-  margin: 0 0 1rem;
-  padding: 1rem 1.15rem 1.1rem;
-  border: 1px solid var(--intimo-outline);
-  border-radius: var(--radius-md);
-  background: var(--intimo-surface);
+/* Consultor INPC en modal (amortizaciones) */
+.modal-backdrop--inpc .modal--inpc {
+  width: min(100%, 40rem);
+  max-width: 40rem;
 }
 
-.deprec-inegi-page-title {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
+.modal-inpc__intro {
+  margin-top: 0;
+}
+
+.modal--inpc .deprec-inegi-block {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0.35rem;
 }
 
 .deprec-inegi-apply-hint {

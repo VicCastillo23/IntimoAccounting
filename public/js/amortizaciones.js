@@ -201,18 +201,23 @@ function updateInegiApplyButtonState() {
   btn.disabled = !modalOpen || !hasFactor;
 }
 
-function toggleInegiPanel() {
-  const panel = $("#inegi-panel-wrap");
-  const btn = $("#btn-inegi-toggle");
-  if (!panel || !btn) return;
-  const opening = panel.hidden;
-  panel.hidden = !opening;
-  btn.setAttribute("aria-expanded", opening ? "true" : "false");
-  if (opening) {
-    ensureInegiMonthDefaults();
-    populateInegiApplyYearSelect();
-    panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
+function openInpcModal() {
+  const backdrop = $("#modal-inpc");
+  if (!backdrop) return;
+  backdrop.hidden = false;
+  backdrop.setAttribute("aria-hidden", "false");
+  ensureInegiMonthDefaults();
+  populateInegiApplyYearSelect();
+  document.querySelector("#modal-inpc .modal")?.focus();
+  updateInegiApplyButtonState();
+}
+
+function closeInpcModal() {
+  const backdrop = $("#modal-inpc");
+  if (!backdrop) return;
+  backdrop.hidden = true;
+  backdrop.setAttribute("aria-hidden", "true");
+  updateInegiApplyButtonState();
 }
 
 async function runInegiCalc() {
@@ -272,12 +277,31 @@ function applyInegiFactorToIpcField() {
   if (lastInegiFactor == null || !Number.isFinite(lastInegiFactor)) return;
   const y = $("#inegi-apply-year")?.value;
   if (!y) return;
+  const deprecBackdrop = $("#modal-deprec");
+  const deprecOpen = Boolean(deprecBackdrop && !deprecBackdrop.hidden);
   const inp = $(`#deprec-ipc-${y}`);
-  if (inp) {
+  if (deprecOpen && inp) {
     inp.value = String(lastInegiFactor);
+    const errEl = $("#deprec-form-error");
+    if (errEl && !errEl.hidden && errEl.textContent) {
+      errEl.hidden = true;
+      errEl.textContent = "";
+    }
     return;
   }
-  showAlert("Abre «Nuevo registro» o «Editar» una fila para que existan los campos IPC del año y vuelve a pulsar «Poner en campo IPC».");
+  const msg =
+    "Abre «Editar» o «Nuevo registro» para mostrar el formulario con los campos IPC del año; después vuelve a pulsar «Poner en campo IPC».";
+  if (deprecOpen) {
+    const errEl = $("#deprec-form-error");
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    } else {
+      window.alert(msg);
+    }
+  } else {
+    window.alert(msg);
+  }
 }
 
 async function refreshFiscalYear() {
@@ -666,11 +690,16 @@ async function boot() {
 
   $("#btn-deprec-modal-save")?.addEventListener("click", () => void saveDeprecModal());
 
-  $("#btn-inegi-toggle")?.addEventListener("click", () => toggleInegiPanel());
+  $("#btn-inpc-open")?.addEventListener("click", () => openInpcModal());
+  $("#btn-inpc-modal-close")?.addEventListener("click", () => closeInpcModal());
   $("#btn-inegi-calc")?.addEventListener("click", () => void runInegiCalc());
   $("#btn-inegi-apply")?.addEventListener("click", () => applyInegiFactorToIpcField());
 
   updateInegiApplyButtonState();
+
+  $("#modal-inpc")?.addEventListener("click", (e) => {
+    if (e.target.id === "modal-inpc") closeInpcModal();
+  });
 
   $("#modal-deprec")?.addEventListener("click", (e) => {
     if (e.target.id === "modal-deprec") {
@@ -695,6 +724,11 @@ async function boot() {
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    const inpc = $("#modal-inpc");
+    if (inpc && !inpc.hidden) {
+      closeInpcModal();
+      return;
+    }
     const m = $("#modal-deprec");
     if (m && !m.hidden) {
       closeDeprecModal();
