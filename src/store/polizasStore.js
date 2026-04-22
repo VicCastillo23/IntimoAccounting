@@ -328,6 +328,65 @@ function normalizeNewPolizaSourceRef(raw) {
 }
 
 /**
+ * Evita el mismo ticket (ticket_id) en más de una póliza y duplicados en la misma captura.
+ * @param {Array<Record<string, unknown>>} lines
+ * @param {string | null} excludePolizaId póliza en edición (no cuenta como conflicto)
+ * @param {import("pg").PoolClient | null} client transacción abierta, o null en modo archivo
+ */
+async function assertTicketIdsForPolizaSave(lines, excludePolizaId, client) {
+  const ids = [];
+  const seen = new Set();
+  for (const l of lines) {
+    const t = String(l.ticketId || "").trim();
+    if (!t) continue;
+    if (seen.has(t)) {
+      const e = new Error(`El ticket "${t}" aparece más de una vez en esta póliza.`);
+      e.code = "TICKET_DUP_LINE";
+      throw e;
+    }
+    seen.add(t);
+    ids.push(t);
+  }
+  if (ids.length === 0) return;
+
+  if (!usePg() || !client) {
+    for (const p of polizas) {
+      if (excludePolizaId && p.id === excludePolizaId) continue;
+      for (const l of p.lines || []) {
+        const tid = String(l.ticketId || "").trim();
+        if (tid && seen.has(tid)) {
+          const e = new Error(
+            `El ticket "${tid}" ya está en la póliza ${String(p.folio || p.id)}. Elimínalo de la otra póliza o quita esta línea.`
+          );
+          e.code = "TICKET_IN_USE";
+          throw e;
+        }
+      }
+    }
+    return;
+  }
+
+  const { rows } = await client.query(
+    `
+    SELECT pl.ticket_id, p.folio
+    FROM accounting.poliza_lines pl
+    INNER JOIN accounting.polizas p ON p.id = pl.poliza_id
+    WHERE pl.ticket_id = ANY($1::text[])
+      AND ($2::varchar IS NULL OR pl.poliza_id <> $2::varchar)
+    `,
+    [ids, excludePolizaId]
+  );
+  if (rows.length > 0) {
+    const r = rows[0];
+    const e = new Error(
+      `El ticket "${r.ticket_id}" ya está registrado en la póliza ${r.folio || "existente"}. No se puede duplicar.`
+    );
+    e.code = "TICKET_IN_USE";
+    throw e;
+  }
+}
+
+/**
  * Crea una póliza nueva (archivo local o PostgreSQL).
  * @param {{ type: string, concept: string, polizaDate?: string, lines: Array<Record<string, unknown>>, sourceRef?: unknown }} input
  */
@@ -341,6 +400,7 @@ export async function saveNewPoliza(input) {
   const y = yearFromIsoDate(date) ?? new Date().getFullYear();
 
   if (!usePg()) {
+    await assertTicketIdsForPolizaSave(lines, null, null);
     const n = String(seq++).padStart(4, "0");
     const folio = `P-${y}-${n}`;
     const row = {
@@ -362,6 +422,8 @@ export async function saveNewPoliza(input) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    await assertTicketIdsForPolizaSave(lines, null, client);
 
     const { rows: cRows } = await client.query(
       `SELECT next_seq FROM accounting.folio_counter WHERE singleton = 1 FOR UPDATE`
@@ -441,6 +503,7 @@ export async function updatePoliza(id, input) {
   if (!existing) throw new Error("Póliza no encontrada.");
 
   if (!usePg()) {
+    await assertTicketIdsForPolizaSave(lines, pid, null);
     const idx = polizas.findIndex((p) => p.id === pid);
     if (idx === -1) throw new Error("Póliza no encontrada.");
     const folio = existing.folio;
@@ -462,6 +525,8 @@ export async function updatePoliza(id, input) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    await assertTicketIdsForPolizaSave(lines, pid, client);
 
     await client.query(
       `UPDATE accounting.polizas

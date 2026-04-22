@@ -799,8 +799,13 @@ app.post("/api/polizas", requireAuth, async (req, res) => {
     res.status(201).json({ success: true, data: row });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "No se pudo guardar la póliza";
-    const code = /unique|duplicate|violates/i.test(msg) ? 409 : 500;
-    res.status(code).json({ success: false, message: msg });
+    const errCode = e && typeof e === "object" && "code" in e ? String(/** @type {{ code?: string }} */ (e).code) : "";
+    const conflict =
+      /unique|duplicate|violates/i.test(msg) ||
+      errCode === "TICKET_IN_USE" ||
+      errCode === "TICKET_DUP_LINE";
+    const code = conflict ? 409 : 500;
+    res.status(code).json({ success: false, message: msg, code: errCode || undefined });
   }
 });
 
@@ -867,6 +872,10 @@ app.patch("/api/polizas/:id", requireAuth, async (req, res) => {
     res.json({ success: true, data: row });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "No se pudo actualizar la póliza";
+    const errCode = e && typeof e === "object" && "code" in e ? String(/** @type {{ code?: string }} */ (e).code) : "";
+    if (errCode === "TICKET_IN_USE" || errCode === "TICKET_DUP_LINE") {
+      return res.status(409).json({ success: false, message: msg, code: errCode });
+    }
     res.status(400).json({ success: false, message: msg });
   }
 });

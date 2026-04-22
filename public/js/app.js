@@ -820,7 +820,13 @@ async function openPosPolizaDraft() {
     if (!res.ok) throw new Error(json.message || "Error al cargar borrador POS");
     const data = json.data;
     if (!data || !data.ticketCount) {
-      showAlert("No hay tickets POS registrados para esa fecha.");
+      if (data?.skippedAlreadyInPoliza > 0 && (data?.ticketsInPosDay ?? 0) > 0) {
+        showAlert(
+          `Todos los tickets de ese día ya están en alguna póliza (${data.skippedAlreadyInPoliza} omitidos). Elimina o edita la póliza que los contiene para volver a usarlos.`
+        );
+      } else {
+        showAlert("No hay tickets POS registrados para esa fecha.");
+      }
       return;
     }
     posDraftSourceRef = data.sourceRef || null;

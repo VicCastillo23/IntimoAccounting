@@ -206,55 +206,70 @@ export async function buildPosDayPolizaDraft(dateStr) {
   const ivaCode = String(process.env.POLIZA_POS_IVA_ACCOUNT_CODE || "208-01").trim() || "208-01";
   const ivaName = String(process.env.POLIZA_POS_IVA_ACCOUNT_NAME || "IVA trasladado").trim();
 
-  const { rows: aggRows } = await pool.query(
+  const { rows: dayCountRow } = await pool.query(
     `
-    SELECT
-      COUNT(*)::int AS c,
-      COALESCE(SUM(subtotal), 0)::float8 AS subtotal,
-      COALESCE(SUM(tax), 0)::float8 AS tax,
-      COALESCE(SUM(total), 0)::float8 AS total
+    SELECT COUNT(*)::int AS c
     FROM pos.purchase_orders
     WHERE source = ANY($1::text[])
       AND occurred_at::date = $2::date
     `,
     [POS_POLIZA_SOURCES, date]
   );
+  const ticketsInPosDay = dayCountRow[0]?.c ?? 0;
 
-  const ticketCount = aggRows[0]?.c ?? 0;
+  const { rows: detail } = await pool.query(
+    `
+    SELECT po.external_id, po.subtotal::float8 AS subtotal, po.tax::float8 AS tax, po.total::float8 AS total
+    FROM pos.purchase_orders po
+    WHERE po.source = ANY($1::text[])
+      AND po.occurred_at::date = $2::date
+      AND NOT EXISTS (
+        SELECT 1
+        FROM accounting.poliza_lines pl
+        WHERE btrim(pl.ticket_id) <> ''
+          AND pl.ticket_id = po.external_id::text
+      )
+    ORDER BY po.occurred_at ASC, po.id ASC
+    `,
+    [POS_POLIZA_SOURCES, date]
+  );
+
+  const ticketCount = detail.length;
+  const skippedAlreadyInPoliza = Math.max(0, ticketsInPosDay - ticketCount);
+
   if (ticketCount === 0) {
+    const concept =
+      skippedAlreadyInPoliza > 0
+        ? `Todos los tickets del ${date} ya están en alguna póliza (${skippedAlreadyInPoliza} omitidos).`
+        : "";
     return {
       ok: true,
       date,
       ticketCount: 0,
+      ticketsInPosDay,
+      skippedAlreadyInPoliza,
       subtotal: 0,
       tax: 0,
       total: 0,
       type: "INGRESOS",
-      concept: "",
+      concept,
       lines: [],
       sourceRef: { kind: "pos_day", date, ticketCount: 0 },
     };
   }
 
-  const subtotalSum = roundMoney(aggRows[0]?.subtotal ?? 0);
-  const taxSum = roundMoney(aggRows[0]?.tax ?? 0);
-  const totalSum = roundMoney(aggRows[0]?.total ?? 0);
-
-  const { rows: detail } = await pool.query(
-    `
-    SELECT external_id, subtotal::float8 AS subtotal, tax::float8 AS tax, total::float8 AS total
-    FROM pos.purchase_orders
-    WHERE source = ANY($1::text[])
-      AND occurred_at::date = $2::date
-    ORDER BY occurred_at ASC, id ASC
-    `,
-    [POS_POLIZA_SOURCES, date]
-  );
-
+  let subtotalSum = 0;
+  let taxSum = 0;
+  let totalSum = 0;
   /** @type {Array<Record<string, unknown>>} */
   const lines = [];
   for (const r of detail) {
+    const st = roundMoney(r.subtotal);
+    const tx = roundMoney(r.tax);
     const tot = roundMoney(r.total);
+    subtotalSum += st;
+    taxSum += tx;
+    totalSum += tot;
     lines.push({
       ticketId: String(r.external_id || "").trim(),
       accountCode: cashCode,
@@ -267,6 +282,9 @@ export async function buildPosDayPolizaDraft(dateStr) {
       credit: 0,
     });
   }
+  subtotalSum = roundMoney(subtotalSum);
+  taxSum = roundMoney(taxSum);
+  totalSum = roundMoney(totalSum);
 
   lines.push({
     ticketId: "",
@@ -304,12 +322,16 @@ export async function buildPosDayPolizaDraft(dateStr) {
     }
   }
 
-  const concept = `Cierre ventas del día ${date} — ${ticketCount} ticket(s) POS (importe total $${totalSum.toFixed(2)} MXN)`;
+  const concept = `Cierre ventas del día ${date} — ${ticketCount} ticket(s) POS no registrados aún en pólizas (total $${totalSum.toFixed(2)} MXN)${
+    skippedAlreadyInPoliza > 0 ? ` · ${skippedAlreadyInPoliza} ticket(s) ya en pólizas omitidos` : ""
+  }`;
 
   return {
     ok: true,
     date,
     ticketCount,
+    ticketsInPosDay,
+    skippedAlreadyInPoliza,
     subtotal: subtotalSum,
     tax: taxSum,
     total: totalSum,
