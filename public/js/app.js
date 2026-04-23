@@ -46,10 +46,27 @@ function deptoLabel(code) {
 
 /** @param {string} url */
 function invoicePdfLinkHtml(url) {
-  const u = String(url || "").trim();
-  if (!u) return "";
-  if (!/^https?:\/\//i.test(u)) return escapeHtml(u);
-  return `<a href="${escapeAttr(u)}" class="poliza-pdf-btn poliza-pdf-btn--readonly" target="_blank" rel="noopener noreferrer" download title="Descargar o abrir factura (PDF/CFDI)"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a>`;
+  return invoiceFacturaLinksHtml(url, "");
+}
+
+/** Enlaces PDF + XML CFDI (columna Factura en pólizas). */
+function invoiceFacturaLinksHtml(pdfUrl, xmlUrl) {
+  const pdf = String(pdfUrl || "").trim();
+  const xml = String(xmlUrl || "").trim();
+  const parts = [];
+  if (pdf && /^https?:\/\//i.test(pdf)) {
+    parts.push(
+      `<a href="${escapeAttr(pdf)}" class="poliza-pdf-btn poliza-pdf-btn--readonly" target="_blank" rel="noopener noreferrer" download title="Factura PDF (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a>`
+    );
+  } else if (pdf) {
+    parts.push(escapeHtml(pdf));
+  }
+  if (xml && /^https?:\/\//i.test(xml)) {
+    parts.push(
+      `<a href="${escapeAttr(xml)}" class="poliza-pdf-btn poliza-pdf-btn--readonly poliza-xml-btn" target="_blank" rel="noopener noreferrer" download title="XML timbrado (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">code</span></a>`
+    );
+  }
+  return parts.join(" ");
 }
 
 /** Texto único para captura: primera línea tipo T-… se guarda como ticket; el resto como concepto mov. */
@@ -190,11 +207,18 @@ function accountPresetOptionsHtml(selectedValue) {
 
 function facturaCellEdit(line, i) {
   const u = String(line.invoiceUrl || "").trim();
-  if (u && /^https?:\/\//i.test(u)) {
-    return `<a href="${escapeAttr(u)}" class="poliza-pdf-btn" target="_blank" rel="noopener noreferrer" download title="Descargar o abrir factura"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a><button type="button" class="btn btn--ghost btn--sm poliza-pdf-clear" data-clear-invoice="${i}" title="Quitar enlace">×</button>`;
+  const x = String(line.invoiceXmlUrl || "").trim();
+  if (
+    (u && /^https?:\/\//i.test(u)) ||
+    (x && /^https?:\/\//i.test(x))
+  ) {
+    return `${invoiceFacturaLinksHtml(u, x)}<button type="button" class="btn btn--ghost btn--sm poliza-pdf-clear" data-clear-invoice="${i}" title="Quitar enlaces">×</button>`;
   }
-  if (line._showInvoice || u) {
-    return `<input type="url" class="line-input poliza-invoice-url-input" data-field="invoiceUrl" placeholder="https://…" value="${escapeAttr(u)}" />`;
+  if (line._showInvoice || u || x) {
+    return `<div class="poliza-invoice-inputs">
+      <input type="url" class="line-input poliza-invoice-url-input" data-field="invoiceUrl" placeholder="URL PDF factura" value="${escapeAttr(u)}" />
+      <input type="url" class="line-input poliza-invoice-url-input poliza-invoice-url-input--sm" data-field="invoiceXmlUrl" placeholder="URL XML (opcional)" value="${escapeAttr(x)}" />
+    </div>`;
   }
   return `<button type="button" class="poliza-factura-add" data-show-invoice="${i}" title="Añadir enlace de factura"><span class="material-symbols-outlined" aria-hidden="true">add_link</span></button>`;
 }
@@ -227,6 +251,7 @@ function mapCreateLinesToPayload() {
     credit: Number(l.credit) || 0,
     lineConcept: String(l.lineConcept || "").trim(),
     invoiceUrl: String(l.invoiceUrl || "").trim(),
+    invoiceXmlUrl: String(l.invoiceXmlUrl || "").trim(),
     fxCurrency: ["MX", "USD", "CAD", "EUR"].includes(String(l.fxCurrency || "MX").toUpperCase())
       ? String(l.fxCurrency).toUpperCase()
       : "MX",
@@ -266,6 +291,7 @@ function normLine(l) {
     credit: Number(l.credit) || 0,
     lineConcept: l.lineConcept || "",
     invoiceUrl: String(l.invoiceUrl || "").trim(),
+    invoiceXmlUrl: String(l.invoiceXmlUrl || "").trim(),
     fxCurrency,
     depto,
   };
@@ -366,7 +392,8 @@ function getMockNewPolizaTemplate() {
         accountCode: "101-01",
         accountName: "Caja Chica",
         lineConcept: "Venta ticket mostrador",
-        invoiceUrl: "https://example.com/cfdi/ticket-0082.xml",
+        invoiceUrl: "https://example.com/cfdi/ticket-0082.pdf",
+        invoiceXmlUrl: "https://example.com/cfdi/ticket-0082.xml",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 450,
@@ -378,6 +405,7 @@ function getMockNewPolizaTemplate() {
         accountName: "Caja Chica",
         lineConcept: "Venta ticket (pendiente factura)",
         invoiceUrl: "",
+        invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 320,
@@ -389,6 +417,7 @@ function getMockNewPolizaTemplate() {
         accountName: "Caja Chica",
         lineConcept: "Venta ticket",
         invoiceUrl: "https://example.com/cfdi/ticket-0084.pdf",
+        invoiceXmlUrl: "",
         fxCurrency: "USD",
         depto: "SERVICIOS_GENERALES",
         debit: 390,
@@ -400,6 +429,7 @@ function getMockNewPolizaTemplate() {
         accountName: "Ventas al 16%",
         lineConcept: "Consolidado ventas",
         invoiceUrl: "",
+        invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 0,
@@ -411,6 +441,7 @@ function getMockNewPolizaTemplate() {
         accountName: "IVA trasladado",
         lineConcept: "IVA 16 %",
         invoiceUrl: "",
+        invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "OTROS",
         debit: 0,
@@ -432,6 +463,7 @@ function getMockEgresosTemplate() {
         accountName: "Gastos generales",
         lineConcept: "Compra o gasto menor",
         invoiceUrl: "",
+        invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 1000,
@@ -443,6 +475,7 @@ function getMockEgresosTemplate() {
         accountName: "Caja Chica",
         lineConcept: "Salida de efectivo",
         invoiceUrl: "",
+        invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 0,
@@ -464,6 +497,7 @@ function getMockTransferenciaTemplate() {
         accountName: "BBVA cuenta xxxxx",
         lineConcept: "Depósito o traspaso a banco",
         invoiceUrl: "",
+        invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 500,
@@ -475,6 +509,7 @@ function getMockTransferenciaTemplate() {
         accountName: "Caja Chica",
         lineConcept: "Origen efectivo",
         invoiceUrl: "",
+        invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 0,
@@ -526,7 +561,7 @@ function matches(p) {
     p.date,
     sourceLabel(p.sourceRef),
     ...(p.lines || []).map((l) =>
-      `${l.ticketId || ""} ${l.accountCode} ${l.accountName} ${l.lineConcept || ""} ${l.invoiceUrl || ""} ${deptoLabel(l.depto)}`.trim()
+      `${l.ticketId || ""} ${l.accountCode} ${l.accountName} ${l.lineConcept || ""} ${l.invoiceUrl || ""} ${l.invoiceXmlUrl || ""} ${deptoLabel(l.depto)}`.trim()
     ),
   ]
     .join(" ")
@@ -581,7 +616,7 @@ function renderViewer() {
         <span class="material-symbols-outlined viewer-empty__icon" aria-hidden="true">receipt_long</span>
         <p class="viewer-empty__title">Visualizador de pólizas</p>
         <p class="viewer-empty__text">Selecciona un renglón en el listado o usa <strong>Nueva póliza</strong> para capturar un asiento.</p>
-        <p class="viewer-empty__hint">Cada <strong>renglón</strong> corresponde a un <strong>ticket de venta</strong> del día; si el ticket está facturado, verás el enlace de descarga del CFDI/PDF. El cierre diario llenará esta póliza desde la base de datos.</p>
+        <p class="viewer-empty__hint">Cada <strong>renglón</strong> corresponde a un <strong>ticket de venta</strong> del día; si el ticket está facturado, verás enlaces para <strong>PDF</strong> y <strong>XML</strong> del CFDI. El borrador desde POS rellena esas URLs desde la base de datos.</p>
       </div>`;
     refreshPolizaPrintHeader();
     return;
@@ -601,7 +636,7 @@ function renderViewer() {
   const rowsHtml = lines
     .map((l) => {
       const block = joinTicketConceptBlock(l.ticketId, l.lineConcept);
-      const factura = invoicePdfLinkHtml(l.invoiceUrl);
+      const factura = invoiceFacturaLinksHtml(l.invoiceUrl, l.invoiceXmlUrl);
       return `
     <tr>
       <td class="poliza-ticket-concept-readonly poliza-col-ticket-concept">
@@ -996,6 +1031,7 @@ function wireUi() {
       accountName: "",
       lineConcept: "",
       invoiceUrl: "",
+      invoiceXmlUrl: "",
       fxCurrency: "MX",
       depto: "ADMINISTRACION",
       debit: 0,
@@ -1015,7 +1051,7 @@ function wireUi() {
         createLines[i]._showInvoice = true;
         renderCreateLinesTable();
         requestAnimationFrame(() => {
-          document.querySelector(`tr[data-idx="${i}"] .poliza-invoice-url-input`)?.focus();
+          document.querySelector(`tr[data-idx="${i}"] [data-field="invoiceUrl"]`)?.focus();
         });
       }
       return;
@@ -1026,6 +1062,7 @@ function wireUi() {
       const i = Number(clr.getAttribute("data-clear-invoice"));
       if (createLines[i]) {
         createLines[i].invoiceUrl = "";
+        createLines[i].invoiceXmlUrl = "";
         createLines[i]._showInvoice = false;
         renderCreateLinesTable();
         updateCreateTotalsBar();
@@ -1159,12 +1196,22 @@ function wireUi() {
     if (!row) return;
     const idx = Number(row.getAttribute("data-idx"));
     if (!createLines[idx]) return;
-    const u = String(t.value || "").trim();
-    createLines[idx].invoiceUrl = u;
-    if (u && /^https?:\/\//i.test(u)) {
+    const field = t.getAttribute("data-field");
+    const val = String(t.value || "").trim();
+    if (field === "invoiceXmlUrl") {
+      createLines[idx].invoiceXmlUrl = val;
+    } else {
+      createLines[idx].invoiceUrl = val;
+    }
+    const u = String(createLines[idx].invoiceUrl || "").trim();
+    const x = String(createLines[idx].invoiceXmlUrl || "").trim();
+    if (
+      (u && /^https?:\/\//i.test(u)) ||
+      (x && /^https?:\/\//i.test(x))
+    ) {
       createLines[idx]._showInvoice = false;
       renderCreateLinesTable();
-    } else if (!u) {
+    } else if (!u && !x) {
       createLines[idx]._showInvoice = false;
       renderCreateLinesTable();
     }

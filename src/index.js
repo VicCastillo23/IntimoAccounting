@@ -743,6 +743,7 @@ function normPolizaLine(l) {
     credit: Number(l.credit) || 0,
     lineConcept: String(l.lineConcept || "").trim(),
     invoiceUrl: String(l.invoiceUrl || "").trim(),
+    invoiceXmlUrl: String(l.invoiceXmlUrl || "").trim(),
     fxCurrency,
     depto: normDepto(l.depto),
   };

@@ -219,7 +219,13 @@ export async function buildPosDayPolizaDraft(dateStr) {
 
   const { rows: detail } = await pool.query(
     `
-    SELECT po.external_id, po.subtotal::float8 AS subtotal, po.tax::float8 AS tax, po.total::float8 AS total
+    SELECT
+      po.external_id,
+      po.subtotal::float8 AS subtotal,
+      po.tax::float8 AS tax,
+      po.total::float8 AS total,
+      COALESCE(NULLIF(btrim(po.invoice_pdf_url), ''), '') AS invoice_pdf_url,
+      COALESCE(NULLIF(btrim(po.invoice_xml_url), ''), '') AS invoice_xml_url
     FROM pos.purchase_orders po
     WHERE po.source = ANY($1::text[])
       AND po.occurred_at::date = $2::date
@@ -270,12 +276,15 @@ export async function buildPosDayPolizaDraft(dateStr) {
     subtotalSum += st;
     taxSum += tx;
     totalSum += tot;
+    const pdf = String(r.invoice_pdf_url || "").trim();
+    const xml = String(r.invoice_xml_url || "").trim();
     lines.push({
       ticketId: String(r.external_id || "").trim(),
       accountCode: cashCode,
       accountName: cashName,
       lineConcept: "Venta POS (ticket)",
-      invoiceUrl: "",
+      invoiceUrl: pdf,
+      invoiceXmlUrl: xml,
       fxCurrency: "MX",
       depto: "ADMINISTRACION",
       debit: tot,

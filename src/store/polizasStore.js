@@ -90,7 +90,7 @@ async function loadFromPg() {
     const { rows: lRows } = await client.query(
       `
       SELECT poliza_id, line_index, ticket_id, account_code, account_name, debit::float8, credit::float8,
-             line_concept, invoice_url, fx_currency, depto
+             line_concept, invoice_url, invoice_xml_url, fx_currency, depto
       FROM accounting.poliza_lines
       WHERE poliza_id = ANY($1::varchar[])
       ORDER BY poliza_id, line_index
@@ -109,6 +109,7 @@ async function loadFromPg() {
         credit: Number(l.credit) || 0,
         lineConcept: l.line_concept ?? "",
         invoiceUrl: l.invoice_url ?? "",
+        invoiceXmlUrl: l.invoice_xml_url ?? "",
         fxCurrency: l.fx_currency ?? "MX",
         depto: l.depto ?? "ADMINISTRACION",
       });
@@ -445,8 +446,8 @@ export async function saveNewPoliza(input) {
     for (const l of lines) {
       await client.query(
         `INSERT INTO accounting.poliza_lines
-         (poliza_id, line_index, ticket_id, account_code, account_name, debit, credit, line_concept, invoice_url, fx_currency, depto)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+         (poliza_id, line_index, ticket_id, account_code, account_name, debit, credit, line_concept, invoice_url, invoice_xml_url, fx_currency, depto)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           id,
           idx,
@@ -457,6 +458,7 @@ export async function saveNewPoliza(input) {
           Number(l.credit) || 0,
           String(l.lineConcept || "").trim(),
           String(l.invoiceUrl || "").trim(),
+          String(l.invoiceXmlUrl || "").trim(),
           String(l.fxCurrency || "MX").toUpperCase(),
           String(l.depto || "ADMINISTRACION").toUpperCase(),
         ]
@@ -541,8 +543,8 @@ export async function updatePoliza(id, input) {
     for (const l of lines) {
       await client.query(
         `INSERT INTO accounting.poliza_lines
-         (poliza_id, line_index, ticket_id, account_code, account_name, debit, credit, line_concept, invoice_url, fx_currency, depto)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+         (poliza_id, line_index, ticket_id, account_code, account_name, debit, credit, line_concept, invoice_url, invoice_xml_url, fx_currency, depto)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           pid,
           idx,
@@ -553,6 +555,7 @@ export async function updatePoliza(id, input) {
           Number(l.credit) || 0,
           String(l.lineConcept || "").trim(),
           String(l.invoiceUrl || "").trim(),
+          String(l.invoiceXmlUrl || "").trim(),
           String(l.fxCurrency || "MX").toUpperCase(),
           String(l.depto || "ADMINISTRACION").toUpperCase(),
         ]

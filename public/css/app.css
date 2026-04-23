@@ -982,6 +982,21 @@ body.nav-drawer-open .nav-backdrop {
   line-height: 1;
 }
 
+.poliza-invoice-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.poliza-invoice-url-input--sm {
+  font-size: 0.8rem;
+}
+
+.poliza-xml-btn {
+  margin-left: 0.15rem;
+}
+
 .poliza-ticket-concept-readonly {
   min-width: 10rem;
   max-width: none;
