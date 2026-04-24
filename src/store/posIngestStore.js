@@ -77,7 +77,7 @@ export async function upsertPosPurchaseOrder(body) {
         loyalty_customer_id = EXCLUDED.loyalty_customer_id,
         raw_payload = EXCLUDED.raw_payload,
         updated_at = now()
-      RETURNING id
+      RETURNING id, public_invoice_token
       `,
       [
         externalId,
@@ -93,6 +93,7 @@ export async function upsertPosPurchaseOrder(body) {
     );
 
     const orderId = ins.rows[0]?.id;
+    const publicInvoiceToken = ins.rows[0]?.public_invoice_token;
     if (!orderId) {
       throw new Error("No se pudo obtener id de purchase_orders.");
     }
@@ -128,7 +129,13 @@ export async function upsertPosPurchaseOrder(body) {
     }
 
     await client.query("COMMIT");
-    return { id: orderId, externalId, source };
+    return {
+      id: orderId,
+      externalId,
+      source,
+      publicInvoiceToken:
+        publicInvoiceToken != null ? String(publicInvoiceToken).trim() : "",
+    };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

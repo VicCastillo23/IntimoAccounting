@@ -33,6 +33,8 @@ psql -v ON_ERROR_STOP=1 -f 06_accounting_catalog.sql
 psql -v ON_ERROR_STOP=1 -f 07_sat_codigo_agrupador_seed.sql
 # Enlaces CFDI en tickets POS + XML en líneas de póliza (IntimoInvoicing ↔ Accounting)
 psql -v ON_ERROR_STOP=1 -f 11_pos_invoice_and_poliza_xml.sql
+# Token opaco por ticket para QR de factura del cliente (no expone número de orden)
+psql -v ON_ERROR_STOP=1 -f 12_purchase_order_public_token.sql
 ```
 
 Los archivos `06` y `07` crean las tablas del **código agrupador SAT** (referencia) y del **catálogo de cuentas de la empresa**, y cargan el listado de códigos agrupadores (verifica contra el PDF oficial del SAT). Edita `01_schemas.sql` si tu rol de aplicación no se llama `intimo_loyalty`.
