@@ -34,6 +34,9 @@ const ALL_MIGRATIONS = [
   "deploy/postgres/08_asset_inventory.sql",
   "deploy/postgres/09_depreciation_amortization.sql",
   "deploy/postgres/10_depreciation_pct_ipc.sql",
+  "deploy/postgres/11_pos_invoice_and_poliza_xml.sql",
+  "deploy/postgres/12_purchase_order_public_token.sql",
+  "deploy/postgres/13_auth_app_users.sql",
 ];
 
 const argv = process.argv.slice(2);

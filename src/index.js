@@ -9,7 +9,7 @@ import { parseKeyHex } from "./crypto/vault.js";
 import { getSessionMiddleware } from "./auth/sessionConfig.js";
 import { requireAuth } from "./auth/middleware.js";
 import { handleLogin, handleLogout, handleMe, handleSetFiscalYear } from "./auth/routes.js";
-import { initUsersStore } from "./auth/usersStore.js";
+import { initUsersStoreAsync } from "./auth/usersStore.js";
 import {
   initPolizasStore,
   saveNewPoliza,
@@ -72,7 +72,6 @@ app.use(
 );
 
 const dataKey = parseKeyHex(process.env.DATA_ENCRYPTION_KEY);
-initUsersStore(dataKey);
 
 app.use(getSessionMiddleware(session));
 app.use(express.json({ limit: "512kb" }));
@@ -969,6 +968,7 @@ async function main() {
   try {
     await ensureDatabaseExistsIfNeeded();
     await ensureCatalogDevIfNeeded();
+    await initUsersStoreAsync(dataKey);
     await initPolizasStore(dataKey);
   } catch (err) {
     const code = err && typeof err === "object" ? err.code : undefined;

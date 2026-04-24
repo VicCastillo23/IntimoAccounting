@@ -73,12 +73,12 @@ export function handleLogout(req, res) {
   });
 }
 
-export function handleMe(req, res) {
+export async function handleMe(req, res) {
   const id = req.session?.userId;
   if (!id) {
     return res.json({ success: true, user: null, fiscalYear: null });
   }
-  const u = getUserById(id);
+  const u = await getUserById(id);
   if (!u) {
     req.session.destroy(() => {});
     return res.json({ success: true, user: null, fiscalYear: null });
@@ -89,12 +89,12 @@ export function handleMe(req, res) {
 }
 
 /** POST /api/session/fiscal-year — ejercicio fiscal activo (sesión). */
-export function handleSetFiscalYear(req, res) {
+export async function handleSetFiscalYear(req, res) {
   const id = req.session?.userId;
   if (!id) {
     return res.status(401).json({ success: false, message: "No autenticado." });
   }
-  const u = getUserById(id);
+  const u = await getUserById(id);
   if (!u) {
     req.session.destroy(() => {});
     return res.status(401).json({ success: false, message: "Sesión inválida." });
