@@ -49,21 +49,31 @@ function invoicePdfLinkHtml(url) {
   return invoiceFacturaLinksHtml(url, "");
 }
 
+/** Añade inline=1 a URLs de descarga IntimoInvoicing para ver en pestaña (no forzar descarga). */
+function invoiceDownloadViewUrl(url) {
+  const u = String(url || "").trim();
+  if (!u || !/\/api\/invoices\//i.test(u) || !/\/download\b/i.test(u)) return u;
+  if (/[?&]inline=1(?:&|$)/i.test(u)) return u;
+  return u.includes("?") ? `${u}&inline=1` : `${u}?inline=1`;
+}
+
 /** Enlaces PDF + XML CFDI (columna Factura en pólizas). */
 function invoiceFacturaLinksHtml(pdfUrl, xmlUrl) {
   const pdf = String(pdfUrl || "").trim();
   const xml = String(xmlUrl || "").trim();
   const parts = [];
   if (pdf && /^https?:\/\//i.test(pdf)) {
+    const href = escapeAttr(invoiceDownloadViewUrl(pdf));
     parts.push(
-      `<a href="${escapeAttr(pdf)}" class="poliza-pdf-btn poliza-pdf-btn--readonly" target="_blank" rel="noopener noreferrer" download title="Factura PDF (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a>`
+      `<a href="${href}" class="poliza-pdf-btn poliza-pdf-btn--readonly" target="_blank" rel="noopener noreferrer" title="Ver factura PDF (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a>`
     );
   } else if (pdf) {
     parts.push(escapeHtml(pdf));
   }
   if (xml && /^https?:\/\//i.test(xml)) {
+    const hrefXml = escapeAttr(invoiceDownloadViewUrl(xml));
     parts.push(
-      `<a href="${escapeAttr(xml)}" class="poliza-pdf-btn poliza-pdf-btn--readonly poliza-xml-btn" target="_blank" rel="noopener noreferrer" download title="XML timbrado (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">code</span></a>`
+      `<a href="${hrefXml}" class="poliza-pdf-btn poliza-pdf-btn--readonly poliza-xml-btn" target="_blank" rel="noopener noreferrer" title="Ver XML timbrado (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">code</span></a>`
     );
   }
   return parts.join(" ");
