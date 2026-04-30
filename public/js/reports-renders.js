@@ -1,4 +1,15 @@
 import { $, money, escapeHtml } from "./reports-core.js";
+import { renderEsfNif, renderEriNif } from "./reports-nif-render.js";
+
+/** @param {object} d respuesta de `/api/reports/dashboard` */
+export function renderEsf(d) {
+  renderEsfNif(d);
+}
+
+/** @param {object} d respuesta de `/api/reports/dashboard` */
+export function renderEstadoResultadosFormal(d) {
+  renderEriNif(d);
+}
 
 export function renderBalanza(d) {
   const tbody = $("#report-tbody-balanza");
@@ -32,32 +43,7 @@ export function renderBalanza(d) {
   );
 }
 
-export function renderEsf(d) {
-  const el = $("#report-esf-cards");
-  if (!el) return;
-  const bs = d.balanceSheet;
-  el.innerHTML = `
-    <div class="report-esf-card">
-      <h3 class="report-esf-card__title">Activo</h3>
-      <p class="report-esf-card__amount">${money(bs.activo)}</p>
-    </div>
-    <div class="report-esf-card">
-      <h3 class="report-esf-card__title">Pasivo</h3>
-      <p class="report-esf-card__amount">${money(bs.pasivo)}</p>
-    </div>
-    <div class="report-esf-card">
-      <h3 class="report-esf-card__title">Capital contable</h3>
-      <p class="report-esf-card__amount">${money(bs.capital)}</p>
-    </div>
-    <div class="report-esf-card report-esf-card--wide">
-      <h3 class="report-esf-card__title">Resultado (acumulado a la fecha)</h3>
-      <p class="report-esf-card__amount">${money(bs.resultadoDelEjercicio)}</p>
-      <p class="report-esf-card__foot">Pasivo + capital + resultado = ${money(bs.totalPasivoCapital)} · Cuadre vs activo: ${money(bs.cuadre)}</p>
-    </div>
-  `;
-}
-
-export function renderActividad(d) {
+export function renderActividadBars(d) {
   const el = $("#report-pl");
   if (!el) return;
   const is = d.incomeStatement;
@@ -84,6 +70,12 @@ export function renderActividad(d) {
       <span>Utilidad neta</span><strong>${money(is.utilidadNeta)}</strong>
     </div>
   `;
+}
+
+/** @param {object} d respuesta de `/api/reports/dashboard` */
+export function renderActividad(d) {
+  renderEstadoResultadosFormal(d);
+  renderActividadBars(d);
 }
 
 export function renderPosSales(d) {
@@ -132,7 +124,7 @@ export function renderVariacionCapital(d) {
   el.innerHTML = `
     <ul class="report-capital-list">
       <li><span>Capital al inicio del periodo</span><strong>${money(v.capitalAlInicio)}</strong></li>
-      <li><span>Resultado del periodo (estado de actividad)</span><strong>${money(v.resultadoDelPeriodo)}</strong></li>
+      <li><span>Resultado del periodo (estado de resultados)</span><strong>${money(v.resultadoDelPeriodo)}</strong></li>
       <li><span>Capital al cierre</span><strong>${money(v.capitalAlCierre)}</strong></li>
       <li class="report-capital-list__note"><span>${escapeHtml(v.nota)}</span></li>
     </ul>

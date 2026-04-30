@@ -99,7 +99,67 @@ function foldBalanceSheet(rows) {
 }
 
 /**
- * @param {{ from: string, to: string, asOf?: string }} range ISO dates YYYY-MM-DD
+ * Desglose de balance por bandas de orden SAT (Anexo 24) para presentación tipo NIF B-6.
+ * Activo circulante: órdenes 3–61 · No circulante: 62–103 · Pasivo corto: 106–150 · largo: 151–168 · Capital (cuentas): 170–183.
+ */
+function foldBalanceSheetBands(rows) {
+  const full = foldBalanceSheet(rows);
+  let activoCirculante = 0;
+  let activoNoCirculante = 0;
+  let pasivoCirculante = 0;
+  let pasivoNoCirculante = 0;
+  let capitalCuentas = 0;
+
+  for (const r of rows) {
+    const d = Number(r.debit) || 0;
+    const c = Number(r.credit) || 0;
+    const net = d - c;
+    const o = Number(r.sat_orden);
+    if (!Number.isFinite(o)) continue;
+    if (o >= 3 && o <= 61) activoCirculante += Math.max(net, 0);
+    else if (o >= 62 && o <= 103) activoNoCirculante += Math.max(net, 0);
+    else if (o >= 106 && o <= 150) pasivoCirculante += Math.max(-net, 0);
+    else if (o >= 151 && o <= 168) pasivoNoCirculante += Math.max(-net, 0);
+    else if (o >= 170 && o <= 183) capitalCuentas += Math.max(-net, 0);
+  }
+
+  return {
+    activoCirculante,
+    activoNoCirculante,
+    pasivoCirculante,
+    pasivoNoCirculante,
+    capitalCuentas,
+    activo: full.activo,
+    pasivo: full.pasivo,
+    capital: full.capital,
+    resultadoDelEjercicio: full.resultadoDelEjercicio,
+    totalPasivoCapital: full.totalPasivoCapital,
+    cuadre: full.cuadre,
+  };
+}
+
+/**
+ * @param {Array<{ debit: unknown, credit: unknown, sat_orden: unknown }>} movRows
+ */
+function aggregateIncomeStatementFromMovRows(movRows) {
+  let ingresos = 0;
+  let costos = 0;
+  let gastos = 0;
+  for (const r of movRows) {
+    const d = Number(r.debit) || 0;
+    const c = Number(r.credit) || 0;
+    const b = satBucketFromOrden(r.sat_orden);
+    if (b === "INGRESOS") ingresos += c - d;
+    else if (b === "COSTOS") costos += d - c;
+    else if (b === "GASTOS") gastos += d - c;
+  }
+  const utilidadBruta = ingresos - costos;
+  const utilidadNeta = utilidadBruta - gastos;
+  return { ingresos, costos, gastos, utilidadBruta, utilidadNeta };
+}
+
+/**
+ * @param {{ from: string, to: string, asOf?: string, compareAsOf?: string, compareFrom?: string, compareTo?: string }} range ISO dates YYYY-MM-DD
  */
 export async function getReportsDashboard(range) {
   const pool = getPool();
@@ -108,6 +168,9 @@ export async function getReportsDashboard(range) {
   const from = String(range.from || "").slice(0, 10);
   const to = String(range.to || "").slice(0, 10);
   const asOf = String(range.asOf || range.to || "").slice(0, 10);
+  const compareAsOf = String(range.compareAsOf || "").slice(0, 10);
+  const compareFrom = String(range.compareFrom || "").slice(0, 10);
+  const compareTo = String(range.compareTo || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
     return { ok: false, reason: "invalid_range" };
   }
@@ -167,25 +230,45 @@ export async function getReportsDashboard(range) {
       [from, to]
     );
 
-    let ingresos = 0;
-    let costos = 0;
-    let gastos = 0;
-    for (const r of movRows) {
-      const d = Number(r.debit) || 0;
-      const c = Number(r.credit) || 0;
-      const b = satBucketFromOrden(r.sat_orden);
-      if (b === "INGRESOS") ingresos += c - d;
-      else if (b === "COSTOS") costos += d - c;
-      else if (b === "GASTOS") gastos += d - c;
-    }
-
-    const utilidadBruta = ingresos - costos;
-    const utilidadNeta = utilidadBruta - gastos;
+    const incCurrent = aggregateIncomeStatementFromMovRows(movRows);
+    const ingresos = incCurrent.ingresos;
+    const costos = incCurrent.costos;
+    const gastos = incCurrent.gastos;
+    const utilidadBruta = incCurrent.utilidadBruta;
+    const utilidadNeta = incCurrent.utilidadNeta;
 
     const rowsOpening = await cumulativeAccountRows(client, openingDate);
     const rowsClosing = await cumulativeAccountRows(client, asOf);
     const balanceOpening = foldBalanceSheet(rowsOpening);
     const balanceClosing = foldBalanceSheet(rowsClosing);
+    const bandsClosing = foldBalanceSheetBands(rowsClosing);
+
+    let bandsCompare = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(compareAsOf)) {
+      const rowsCmp = await cumulativeAccountRows(client, compareAsOf);
+      bandsCompare = foldBalanceSheetBands(rowsCmp);
+    }
+
+    let incomeCompare = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(compareFrom) && /^\d{4}-\d{2}-\d{2}$/.test(compareTo)) {
+      const { rows: movCmp } = await client.query(
+        `
+      SELECT
+        pl.account_code,
+        COALESCE(SUM(pl.debit), 0)::float8 AS debit,
+        COALESCE(SUM(pl.credit), 0)::float8 AS credit,
+        sat.orden AS sat_orden
+      FROM accounting.poliza_lines pl
+      INNER JOIN accounting.polizas p ON p.id = pl.poliza_id
+      LEFT JOIN accounting.chart_accounts c ON c.num_cta = pl.account_code
+      LEFT JOIN accounting.sat_codigo_agrupador sat ON sat.id = c.sat_codigo_agrupador_id
+      WHERE p.poliza_date >= $1::date AND p.poliza_date <= $2::date
+      GROUP BY pl.account_code, sat.orden
+      `,
+        [compareFrom, compareTo]
+      );
+      incomeCompare = aggregateIncomeStatementFromMovRows(movCmp);
+    }
 
     const cambiosSituacionFinanciera = {
       fechaInicial: openingDate,
@@ -257,7 +340,15 @@ export async function getReportsDashboard(range) {
 
     return {
       ok: true,
-      range: { from, to, asOf, openingDate },
+      range: {
+        from,
+        to,
+        asOf,
+        openingDate,
+        compareAsOf: /^\d{4}-\d{2}-\d{2}$/.test(compareAsOf) ? compareAsOf : null,
+        compareFrom: /^\d{4}-\d{2}-\d{2}$/.test(compareFrom) ? compareFrom : null,
+        compareTo: /^\d{4}-\d{2}-\d{2}$/.test(compareTo) ? compareTo : null,
+      },
       polizasEnPeriodo: cnt[0]?.n ?? 0,
       trialBalance,
       totals: {
@@ -279,6 +370,17 @@ export async function getReportsDashboard(range) {
         resultadoDelEjercicio: balanceClosing.resultadoDelEjercicio,
         totalPasivoCapital: balanceClosing.totalPasivoCapital,
         cuadre: balanceClosing.cuadre,
+      },
+      /** Presentación NIF: bandas SAT + columnas comparativas opcionales */
+      nif: {
+        estadoSituacionFinanciera: {
+          current: bandsClosing,
+          compare: bandsCompare,
+        },
+        estadoResultadoIntegral: {
+          current: incCurrent,
+          compare: incomeCompare,
+        },
       },
       cambiosSituacionFinanciera,
       variacionCapitalContable,

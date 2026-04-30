@@ -20,7 +20,7 @@ if (params.get("m") === "catalogo-cuentas") {
     "control-depreciaciones-amortizaciones": "Control de depreciaciones y amortizaciones",
     "balanza-comprobacion": "Balanza de comprobación",
     "estado-situacion-financiera": "Estado de situación financiera",
-    "estado-actividad": "Estado de actividad",
+    "estado-actividad": "Estado de resultado integral",
     "estado-cambios-situacion-financiera": "Estado de cambios en la situación financiera",
     "estado-variacion-capital-contable": "Estado de variación en las cuentas de capital contable",
     "estado-flujo-efectivo": "Estado de flujo de efectivo",

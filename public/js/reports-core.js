@@ -62,13 +62,29 @@ export function getDateRange() {
 export function setMeta(d) {
   const meta = $("#report-meta");
   if (meta && d?.range) {
-    meta.textContent = `Periodo ${d.range.from} → ${d.range.to} · ${d.polizasEnPeriodo} pólizas · Cierre ${d.range.asOf}`;
+    let t = `Periodo ${d.range.from} → ${d.range.to} · ${d.polizasEnPeriodo} pólizas · Cierre ${d.range.asOf}`;
+    if (d.range.compareAsOf) t += ` · Balance comparativo al ${d.range.compareAsOf}`;
+    if (d.range.compareFrom && d.range.compareTo) {
+      t += ` · Resultado comparativo ${d.range.compareFrom} → ${d.range.compareTo}`;
+    }
+    meta.textContent = t;
   }
+}
+
+export function getCompareParams() {
+  const compareAsOf = document.getElementById("report-compare-as-of")?.value?.slice(0, 10) ?? "";
+  const compareFrom = document.getElementById("report-compare-from")?.value?.slice(0, 10) ?? "";
+  const compareTo = document.getElementById("report-compare-to")?.value?.slice(0, 10) ?? "";
+  return { compareAsOf, compareFrom, compareTo };
 }
 
 export async function loadDashboard() {
   const { from, to } = getDateRange();
+  const { compareAsOf, compareFrom, compareTo } = getCompareParams();
   const qs = new URLSearchParams({ from, to, asOf: to });
+  if (/^\d{4}-\d{2}-\d{2}$/.test(compareAsOf)) qs.set("compareAsOf", compareAsOf);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(compareFrom)) qs.set("compareFrom", compareFrom);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(compareTo)) qs.set("compareTo", compareTo);
   const res = await fetch(`/api/reports/dashboard?${qs}`, { credentials: "include" });
   if (res.status === 401) {
     window.location.href = "/login.html";

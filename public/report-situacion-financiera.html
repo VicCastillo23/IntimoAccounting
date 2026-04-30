@@ -43,7 +43,7 @@
         <p class="sidebar__section-title">Reportería</p>
         <a class="sidebar__link" href="/report-balanza.html"><span class="material-symbols-outlined" aria-hidden="true">balance</span>Balanza de comprobación</a>
         <a class="sidebar__link sidebar__link--active" href="/report-situacion-financiera.html"><span class="material-symbols-outlined" aria-hidden="true">pie_chart</span>Estado de situación financiera</a>
-        <a class="sidebar__link" href="/report-actividad.html"><span class="material-symbols-outlined" aria-hidden="true">analytics</span>Estado de actividad</a>
+        <a class="sidebar__link" href="/report-actividad.html"><span class="material-symbols-outlined" aria-hidden="true">analytics</span>Estado de resultado integral</a>
         <a class="sidebar__link" href="/report-cambios-situacion.html"><span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>Estado de cambios en la situación financiera</a>
         <a class="sidebar__link" href="/report-variacion-capital.html"><span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>Estado de variación en las cuentas de capital contable</a>
         <a class="sidebar__link" href="/report-flujo-efectivo.html"><span class="material-symbols-outlined" aria-hidden="true">payments</span>Estado de flujo de efectivo</a>
@@ -54,7 +54,7 @@
       <p class="sidebar__foot">Clasificación por código agrupador SAT (Anexo 24).</p>
     </aside>
 
-    <main class="main main--report">
+    <main class="main main--report main--report-wide">
       <div id="report-print-header" class="report-print-header-wrap" aria-hidden="true"></div>
       <header class="main__header">
         <h1 class="main__h1">Estado de situación financiera</h1>
@@ -66,7 +66,11 @@
       <div class="report-toolbar panel">
         <div class="report-toolbar__dates">
           <label class="report-field"><span>Desde</span><input type="date" id="report-from" class="report-field__input" /></label>
-          <label class="report-field"><span>Hasta</span><input type="date" id="report-to" class="report-field__input" /></label>
+          <label class="report-field"><span>Hasta (cierre)</span><input type="date" id="report-to" class="report-field__input" /></label>
+          <label class="report-field report-field--compare" title="Segunda columna del estado de situación financiera"
+            ><span>Cierre comparativo</span
+            ><input type="date" id="report-compare-as-of" class="report-field__input"
+          /></label>
           <button type="button" class="btn btn--primary btn--sm" id="btn-report-apply">Actualizar</button>
           <button type="button" class="btn btn--ghost btn--sm" id="btn-report-print" title="Imprimir">
             <span class="material-symbols-outlined" aria-hidden="true">print</span>
@@ -77,13 +81,14 @@
       </div>
       <div id="report-alert" class="report-alert-slot"></div>
 
+      <section class="report-section panel" aria-label="Estado de situación financiera">
+        <h2 class="report-section__title">Estado de situación financiera <span class="report-section__nif">(presentación tipo NIF B-6)</span></h2>
+        <div id="report-esf-formal"></div>
+      </section>
+
       <section class="report-section panel report-hide-print">
         <h2 class="report-section__title">Composición de situación financiera</h2>
         <div class="report-chart-wrap report-chart-wrap--small"><canvas id="report-chart-esf"></canvas></div>
-      </section>
-
-      <section class="report-section panel">
-        <div class="report-esf-grid" id="report-esf-cards"></div>
       </section>
     </main>
   </div>

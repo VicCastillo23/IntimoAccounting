@@ -147,6 +147,14 @@
     font-size: 11pt !important;
   }
 
+  .report-financial-statement {
+    max-width: none !important;
+  }
+
+  .report-financial-statement__table {
+    font-size: 9.5pt !important;
+  }
+
   /* Secciones que en pantalla son solo título + gráfico (sin tablas útiles al imprimir). */
   .report-hide-print {
     display: none !important;
@@ -173,6 +181,33 @@
   .data-table th,
   .data-table td {
     padding: 4pt 6pt !important;
+  }
+
+  .report-nif-table-wrap {
+    overflow: visible !important;
+    margin: 0 !important;
+  }
+
+  .report-nif-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 9pt !important;
+    break-inside: auto;
+  }
+
+  .report-nif-table thead {
+    display: table-header-group;
+  }
+
+  .report-nif-table th,
+  .report-nif-table td {
+    padding: 3pt 5pt !important;
+  }
+
+  .report-nif-doc__period,
+  .report-nif-foot {
+    font-size: 8.5pt !important;
+    color: #222 !important;
   }
 
   a[href]::after {

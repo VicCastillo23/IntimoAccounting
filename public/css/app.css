@@ -177,25 +177,62 @@ body.nav-drawer-open .nav-backdrop {
 .sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.45rem;
   max-height: calc(100vh - 12rem);
   overflow-y: auto;
   padding-right: 0.25rem;
   margin-right: -0.25rem;
 }
 
+.sidebar__group {
+  border-radius: var(--radius-sm);
+}
+
+.sidebar__group-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0.35rem 0.2rem 0.1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.sidebar__group-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar__group-chevron {
+  font-size: 1.1rem;
+  transition: transform 0.16s ease;
+}
+
+.sidebar__group.is-open .sidebar__group-chevron {
+  transform: rotate(180deg);
+}
+
+.sidebar__group-panel {
+  display: none;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-left: 0.35rem;
+}
+
+.sidebar__group.is-open .sidebar__group-panel {
+  display: flex;
+}
+
 .sidebar__section-title {
-  margin: 0.85rem 0 0.35rem;
+  margin: 0;
   padding: 0 0.75rem;
   font-size: 0.625rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: rgba(255, 255, 255, 0.42);
-}
-
-.sidebar__section-title:first-of-type {
-  margin-top: 0;
 }
 
 .sidebar__link {
@@ -2660,6 +2697,89 @@ select.field__input--select:disabled {
   margin-top: 0.25rem;
 }
 
+/* Estados financieros — formato vertical tipo dictamen / PDF (concepto | importe) */
+.report-financial-statement {
+  max-width: 52rem;
+}
+
+.report-financial-statement__subtitle {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--intimo-gray);
+}
+
+.report-financial-statement__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-financial-statement__table thead th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--intimo-black);
+  background: var(--intimo-surface);
+}
+
+.report-financial-statement__amount-col {
+  text-align: right;
+  width: 11rem;
+}
+
+.report-financial-statement__table tbody td,
+.report-financial-statement__table tbody th {
+  padding: 0.45rem 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--intimo-outline);
+}
+
+.report-financial-statement__section-row th {
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--intimo-bg);
+  border-bottom: 1px solid var(--intimo-outline);
+  padding-top: 0.65rem;
+  padding-bottom: 0.5rem;
+}
+
+.report-financial-statement__concept--indent {
+  padding-left: 1.5rem !important;
+}
+
+.report-financial-statement__amount {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.report-financial-statement__subtotal-row td {
+  border-top: 1px solid var(--intimo-outline);
+  padding-top: 0.65rem;
+}
+
+.report-financial-statement__total-row td {
+  border-top: 2px solid var(--intimo-black);
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+.report-financial-statement__total-row--balance td {
+  font-size: 0.875rem;
+  border-top: 1px dashed var(--intimo-outline);
+}
+
+.report-financial-statement__footnote {
+  margin: 1rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--intimo-gray-light);
+}
+
 .report-capital-list {
   list-style: none;
   margin: 0;
@@ -2747,4 +2867,151 @@ select.field__input--select:disabled {
 .report-chart-wrap--ready {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Estados financieros formales NIF (B-6 situación financiera, B-3 resultado integral) */
+.report-toolbar__dates--wrap {
+  flex: 1 1 100%;
+  min-width: min(100%, 28rem);
+}
+
+.report-section__nif {
+  font-weight: 500;
+  color: var(--intimo-gray-light);
+  font-size: 0.875em;
+}
+
+.report-nif-doc {
+  margin-top: 0.35rem;
+}
+
+.report-nif-doc__meta {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--intimo-gray-medium);
+}
+
+.report-nif-doc__note {
+  color: var(--intimo-gray-light);
+}
+
+.report-nif-doc__period {
+  margin: 0 0 0.65rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--intimo-gray-medium);
+}
+
+.report-nif-table-wrap {
+  margin: 0.25rem 0 0.75rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.report-nif-table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.report-nif-table thead th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--intimo-gray-light);
+  padding: 0.6rem 0.55rem 0.45rem;
+  border-bottom: 2px solid var(--intimo-black);
+  vertical-align: bottom;
+}
+
+.report-nif-table thead th.report-nif-amt {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.report-nif-table tbody td {
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  vertical-align: top;
+}
+
+.report-nif-col-ref {
+  width: 3rem;
+  font-size: 0.75rem;
+  color: var(--intimo-gray-light);
+  white-space: nowrap;
+}
+
+.report-nif-col-concept {
+  min-width: 12rem;
+}
+
+.report-nif-amt {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 7.5rem;
+}
+
+.report-nif-ind1 {
+  padding-left: 1.35rem !important;
+}
+
+.report-nif-tr--major td {
+  padding-top: 0.85rem;
+  padding-bottom: 0.35rem;
+  border-bottom: none;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+}
+
+.report-nif-tr--sect td {
+  padding-top: 0.65rem;
+  font-size: 0.875rem;
+}
+
+.report-nif-tr--subtotal td {
+  border-top: 1px solid var(--intimo-outline);
+  padding-top: 0.55rem;
+}
+
+.report-nif-tr--grand td {
+  font-weight: 700;
+}
+
+.report-nif-tr--grand td.report-nif-amt {
+  border-bottom: 3px double var(--intimo-black);
+  padding-bottom: 0.35rem;
+}
+
+.report-nif-tr--grand td.report-nif-col-ref {
+  border-bottom: 3px double transparent;
+}
+
+.report-nif-fn {
+  font-size: 0.8em;
+  color: var(--intimo-gray-light);
+}
+
+.report-nif-foot {
+  margin: 0.85rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--intimo-gray-light);
+  max-width: 52rem;
+}
+
+.fr-xml {
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0.5rem 0 0;
+  padding: 0.6rem;
+  border: 1px solid var(--intimo-outline);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  background: #fafafa;
 }

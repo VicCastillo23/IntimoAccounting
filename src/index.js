@@ -43,6 +43,14 @@ import {
   updateDepreciationSchedule,
   syncDepreciationFromActivos,
 } from "./store/depreciacionStore.js";
+import {
+  importReceivedInvoicesZip,
+  listReceivedInvoices,
+  getReceivedInvoiceById,
+  updateReceivedInvoiceStatus,
+  listIssuedInvoicesBase,
+  linkPaidReceivedInvoice,
+} from "./store/receivedInvoicesStore.js";
 import { calcularFactorActualizacion } from "./services/inegiInpc.js";
 import { getBrandingForApi } from "./config/branding.js";
 
@@ -54,6 +62,10 @@ const port = Number(process.env.PORT) || 3010;
 const uploadActivos = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
+});
+const uploadInvoicesZip = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 30 * 1024 * 1024 },
 });
 
 const trustProxyEnv = String(process.env.TRUST_PROXY || "").toLowerCase();
@@ -121,6 +133,7 @@ app.get("/api/config/branding", requireAuth, (_req, res) => {
 const DEPTO_VALUES = ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"];
 
 const POLIZA_TYPES = new Set(["DIARIO", "INGRESOS", "EGRESOS", "TRANSFERENCIA"]);
+const RECEIVED_INVOICE_STATUSES = new Set(["pending", "paid", "cancelled"]);
 
 function normDepto(v) {
   const u = String(v || "").toUpperCase();
@@ -137,6 +150,30 @@ function yearOfIsoDate(s) {
   const t = String(s || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
   return parseInt(t.slice(0, 4), 10);
+}
+
+function respondStoreError(res, out, fallbackMessage) {
+  if (out.reason === "no_database") {
+    return res.status(503).json({
+      success: false,
+      message: "Este módulo requiere PostgreSQL (DATABASE_URL).",
+      code: out.reason,
+    });
+  }
+  if (out.reason === "missing_table") {
+    return res.status(503).json({
+      success: false,
+      message: out.message || "Falta migración de base de datos.",
+      code: out.reason,
+    });
+  }
+  if (out.reason === "validation") {
+    return res.status(400).json({ success: false, message: out.message || "Datos inválidos.", code: out.reason });
+  }
+  if (out.reason === "not_found") {
+    return res.status(404).json({ success: false, message: out.message || "No encontrado.", code: out.reason });
+  }
+  return res.status(400).json({ success: false, message: out.message || fallbackMessage, code: out.reason });
 }
 
 app.post("/api/session/fiscal-year", requireAuth, handleSetFiscalYear);
@@ -628,6 +665,218 @@ app.post(
   }
 );
 
+app.post(
+  "/api/invoices/received/import-zip",
+  requireAuth,
+  (req, res, next) => {
+    uploadInvoicesZip.single("file")(req, res, (err) => {
+      if (err) {
+        const msg =
+          err.code === "LIMIT_FILE_SIZE"
+            ? "Archivo demasiado grande (máx. 30 MB)."
+            : err.message || "Error al recibir el ZIP.";
+        return res.status(400).json({ success: false, message: msg });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const f = req.file;
+      if (!f?.buffer) {
+        return res.status(400).json({ success: false, message: "Adjunta un archivo ZIP con CFDI XML." });
+      }
+      const name = String(f.originalname || "").toLowerCase();
+      if (!name.endsWith(".zip")) {
+        return res.status(400).json({ success: false, message: "Formato no soportado. Usa un .zip del SAT." });
+      }
+      const out = await importReceivedInvoicesZip(f.buffer, {
+        sourceName: f.originalname || "cfdi-recibidas.zip",
+        uploadedBy: String(req.session?.username || ""),
+      });
+      if (!out.ok) return respondStoreError(res, out, "No se pudo importar el ZIP.");
+      res.status(201).json({ success: true, data: out });
+    } catch (e) {
+      res.status(500).json({
+        success: false,
+        message: e instanceof Error ? e.message : "Error al importar ZIP de facturas recibidas",
+      });
+    }
+  }
+);
+
+app.get("/api/invoices/received", requireAuth, async (req, res) => {
+  try {
+    const out = await listReceivedInvoices({
+      query: typeof req.query.query === "string" ? req.query.query : "",
+      issuerRfc: typeof req.query.issuerRfc === "string" ? req.query.issuerRfc : "",
+      status: typeof req.query.status === "string" ? req.query.status : "",
+      from: typeof req.query.from === "string" ? req.query.from : "",
+      to: typeof req.query.to === "string" ? req.query.to : "",
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 50,
+    });
+    if (!out.ok) return respondStoreError(res, out, "No se pudo consultar facturas recibidas.");
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al consultar facturas recibidas",
+    });
+  }
+});
+
+app.get("/api/invoices/received/:id", requireAuth, async (req, res) => {
+  try {
+    const out = await getReceivedInvoiceById(req.params.id);
+    if (!out.ok) return respondStoreError(res, out, "No se pudo consultar la factura recibida.");
+    res.json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al consultar factura recibida",
+    });
+  }
+});
+
+app.patch("/api/invoices/received/:id/status", requireAuth, async (req, res) => {
+  try {
+    const status = String(req.body?.status || "").toLowerCase();
+    if (!RECEIVED_INVOICE_STATUSES.has(status)) {
+      return res.status(400).json({ success: false, message: "Estatus inválido." });
+    }
+    const out = await updateReceivedInvoiceStatus(req.params.id, /** @type {"pending"|"paid"|"cancelled"} */ (status));
+    if (!out.ok) return respondStoreError(res, out, "No se pudo actualizar estatus.");
+    res.json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al actualizar estatus",
+    });
+  }
+});
+
+app.post("/api/invoices/received/:id/pay", requireAuth, async (req, res) => {
+  const fy = resolveFiscalYear(req);
+  if (fy == null) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecciona un ejercicio fiscal antes de marcar facturas pagadas.",
+    });
+  }
+  try {
+    const mode = String(req.body?.mode || "").toLowerCase();
+    if (!["automatic", "suggested"].includes(mode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Modo inválido. Usa automatic o suggested.",
+      });
+    }
+
+    const invoiceOut = await getReceivedInvoiceById(req.params.id);
+    if (!invoiceOut.ok) return respondStoreError(res, invoiceOut, "No se encontró la factura.");
+    const inv = invoiceOut.row;
+    const total = Number(inv.total || 0);
+    const provider = String(inv.issuer_rfc || "").trim();
+    const dateCandidate = String(inv.issued_at || "").slice(0, 10);
+    const yCandidate = yearOfIsoDate(dateCandidate);
+    const polizaDate = yCandidate === fy ? dateCandidate : `${fy}-12-31`;
+
+    const draft = {
+      type: "EGRESOS",
+      concept: `Pago factura recibida ${inv.cfdi_uuid || `${inv.series || ""}${inv.folio || ""}`}`.trim(),
+      polizaDate,
+      sourceRef: {
+        module: "invoicing-received",
+        invoicePublicId: inv.public_id,
+        cfdiUuid: inv.cfdi_uuid || "",
+        mode,
+      },
+      lines: [
+        {
+          ticketId: "",
+          accountCode: "201.01.001",
+          accountName: `Proveedores ${provider}`.trim(),
+          debit: total,
+          credit: 0,
+          lineConcept: "Liquidación de proveedor",
+          invoiceUrl: "",
+          invoiceXmlUrl: "",
+          fxCurrency: "MX",
+          depto: "ADMINISTRACION",
+        },
+        {
+          ticketId: "",
+          accountCode: "102.01.001",
+          accountName: "Bancos",
+          debit: 0,
+          credit: total,
+          lineConcept: "Salida de bancos",
+          invoiceUrl: "",
+          invoiceXmlUrl: "",
+          fxCurrency: "MX",
+          depto: "ADMINISTRACION",
+        },
+      ],
+    };
+
+    if (mode === "suggested") {
+      const linkOut = await linkPaidReceivedInvoice(req.params.id, null, "suggested");
+      if (!linkOut.ok) return respondStoreError(res, linkOut, "No se pudo guardar modo sugerido.");
+      return res.json({
+        success: true,
+        data: {
+          mode: "suggested",
+          invoice: linkOut.row,
+          draftPoliza: draft,
+        },
+      });
+    }
+
+    const saved = await saveNewPoliza({
+      type: draft.type,
+      concept: draft.concept,
+      polizaDate: draft.polizaDate,
+      lines: draft.lines.map(normPolizaLine),
+      sourceRef: draft.sourceRef,
+    });
+    const linkOut = await linkPaidReceivedInvoice(req.params.id, String(saved.id), "automatic");
+    if (!linkOut.ok) return respondStoreError(res, linkOut, "No se pudo vincular la factura pagada.");
+    res.status(201).json({
+      success: true,
+      data: {
+        mode: "automatic",
+        invoice: linkOut.row,
+        poliza: saved,
+      },
+    });
+  } catch (e) {
+    const errCode = e && typeof e === "object" && "code" in e ? String(/** @type {{code?: string}} */ (e).code) : "";
+    const conflict = errCode === "TICKET_IN_USE" || errCode === "TICKET_DUP_LINE";
+    res.status(conflict ? 409 : 500).json({
+      success: false,
+      code: errCode || undefined,
+      message: e instanceof Error ? e.message : "Error al registrar pago de factura recibida",
+    });
+  }
+});
+
+app.get("/api/invoices/issued", requireAuth, async (req, res) => {
+  try {
+    const out = await listIssuedInvoicesBase({
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 50,
+    });
+    if (!out.ok) return respondStoreError(res, out, "No se pudo consultar facturas emitidas.");
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al consultar facturas emitidas",
+    });
+  }
+});
+
 app.post("/api/pos/purchase-orders", requirePosIngestAuth, async (req, res) => {
   try {
     const b = req.body || {};
@@ -657,7 +906,17 @@ app.get("/api/reports/dashboard", requireAuth, async (req, res) => {
     const from = typeof req.query.from === "string" ? req.query.from : "";
     const to = typeof req.query.to === "string" ? req.query.to : "";
     const asOf = typeof req.query.asOf === "string" ? req.query.asOf : "";
-    const out = await getReportsDashboard({ from, to, asOf: asOf || undefined });
+    const compareAsOf = typeof req.query.compareAsOf === "string" ? req.query.compareAsOf : "";
+    const compareFrom = typeof req.query.compareFrom === "string" ? req.query.compareFrom : "";
+    const compareTo = typeof req.query.compareTo === "string" ? req.query.compareTo : "";
+    const out = await getReportsDashboard({
+      from,
+      to,
+      asOf: asOf || undefined,
+      compareAsOf: compareAsOf || undefined,
+      compareFrom: compareFrom || undefined,
+      compareTo: compareTo || undefined,
+    });
     if (!out.ok) {
       const code = out.reason === "invalid_range" ? 400 : 503;
       return res.status(code).json({
@@ -931,6 +1190,8 @@ app.get("/auxiliar-mayor.html", sendHtmlIfAuthed("auxiliar-mayor.html"));
 app.get("/libro-diario.html", sendHtmlIfAuthed("libro-diario.html"));
 app.get("/activos.html", sendHtmlIfAuthed("activos.html"));
 app.get("/amortizaciones.html", sendHtmlIfAuthed("amortizaciones.html"));
+app.get("/facturas-recibidas.html", sendHtmlIfAuthed("facturas-recibidas.html"));
+app.get("/facturas-emitidas.html", sendHtmlIfAuthed("facturas-emitidas.html"));
 
 const reportPages = [
   "report-balanza.html",

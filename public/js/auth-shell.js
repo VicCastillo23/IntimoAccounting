@@ -1,5 +1,6 @@
 import { initMobileNav } from "./mobile-nav.js";
 import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
+import { initSidebarNav } from "./sidebar-nav.js";
 
 /**
  * Sesión + ejercicio fiscal + logout en páginas con el mismo shell lateral.
@@ -22,6 +23,7 @@ export async function initAuthShell(options = {}) {
   }
 
   injectFiscalSidebar(fiscalYear, options.onFiscalChange);
+  initSidebarNav();
 
   document.getElementById("btn-logout")?.addEventListener("click", async () => {
     try {

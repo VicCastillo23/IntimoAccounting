@@ -1,6 +1,7 @@
 import { initMobileNav } from "./mobile-nav.js";
 import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
 import { initPolizaPrintBranding, refreshPolizaPrintHeader } from "./report-print-branding.js";
+import { initSidebarNav } from "./sidebar-nav.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -1319,6 +1320,7 @@ async function boot() {
   const el = document.getElementById("session-user");
   if (el) el.textContent = j.user.username;
   injectFiscalSidebar(fiscalYear, () => void load());
+  initSidebarNav();
 
   void initPolizaPrintBranding(() => {
     if (viewerMode !== "view" || !selectedId) return null;
