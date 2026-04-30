@@ -368,20 +368,70 @@ export async function listIssuedInvoicesBase(p = {}) {
   const page = Math.max(1, Number(p.page) || 1);
   const offset = (page - 1) * limit;
   try {
-    const [{ rows }, { rows: cRows }] = await Promise.all([
-      pool.query(
-        `SELECT id, public_id, cfdi_uuid, folio, series, customer_rfc, issuer_rfc, total::float8,
-                currency, status, pdf_url, xml_url, issued_at, created_at
-           FROM invoicing.invoices
-          ORDER BY coalesce(issued_at, created_at) DESC, id DESC
-          LIMIT $1 OFFSET $2`,
-        [limit, offset]
-      ),
-      pool.query(`SELECT count(*)::int AS n FROM invoicing.invoices`),
-    ]);
+    const sql = `
+      WITH unioned AS (
+        SELECT
+          concat('inv-', i.id)::text AS id,
+          i.public_id::text AS public_id,
+          coalesce(i.cfdi_uuid, '') AS cfdi_uuid,
+          coalesce(i.folio, '') AS folio,
+          coalesce(i.series, '') AS series,
+          coalesce(i.customer_rfc, '') AS customer_rfc,
+          coalesce(i.issuer_rfc, '') AS issuer_rfc,
+          i.total::float8 AS total,
+          coalesce(i.currency, 'MXN') AS currency,
+          coalesce(i.status, '') AS status,
+          coalesce(i.pdf_url, '') AS pdf_url,
+          coalesce(i.xml_url, '') AS xml_url,
+          i.issued_at,
+          i.created_at
+        FROM invoicing.invoices i
+
+        UNION ALL
+
+        SELECT
+          concat('pos-', po.id)::text AS id,
+          concat('pos-', po.id)::text AS public_id,
+          coalesce(po.cfdi_uuid, '') AS cfdi_uuid,
+          coalesce(po.external_id, '') AS folio,
+          '' AS series,
+          '' AS customer_rfc,
+          '' AS issuer_rfc,
+          po.total::float8 AS total,
+          coalesce(po.currency, 'MXN') AS currency,
+          'facturada' AS status,
+          coalesce(po.invoice_pdf_url, '') AS pdf_url,
+          coalesce(po.invoice_xml_url, '') AS xml_url,
+          po.occurred_at AS issued_at,
+          po.created_at
+        FROM pos.purchase_orders po
+        WHERE length(trim(coalesce(po.cfdi_uuid, ''))) > 0
+           OR length(trim(coalesce(po.invoice_pdf_url, ''))) > 0
+           OR length(trim(coalesce(po.invoice_xml_url, ''))) > 0
+      )
+      SELECT *
+      FROM unioned
+      ORDER BY coalesce(issued_at, created_at) DESC, id DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+    const countSql = `
+      SELECT (
+        (SELECT count(*)::int FROM invoicing.invoices) +
+        (
+          SELECT count(*)::int
+          FROM pos.purchase_orders po
+          WHERE length(trim(coalesce(po.cfdi_uuid, ''))) > 0
+             OR length(trim(coalesce(po.invoice_pdf_url, ''))) > 0
+             OR length(trim(coalesce(po.invoice_xml_url, ''))) > 0
+        )
+      )::int AS n
+    `;
+
+    const [{ rows }, { rows: cRows }] = await Promise.all([pool.query(sql, [limit, offset]), pool.query(countSql)]);
     return { ok: true, rows, total: cRows[0]?.n || 0, page, limit };
   } catch (e) {
-    if (e && typeof e === "object" && "code" in e && e.code === "42P01") {
+    if (e && typeof e === "object" && "code" in e && (e.code === "42P01" || e.code === "42703")) {
       return { ok: false, reason: "missing_table", message: "Falta migración de facturación emitida." };
     }
     throw e;
