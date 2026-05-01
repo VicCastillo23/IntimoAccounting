@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#000000" />
-  <title>Íntimo · Facturas emitidas</title>
+  <title>Íntimo · Facturación Facturama</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -36,40 +36,32 @@
 
     <main class="main main--report">
       <header class="main__header">
-        <h1 class="main__h1">Facturas emitidas</h1>
-        <p class="main__lead">Listado interno de CFDI emitidos detectados por el módulo de facturación.</p>
+        <h1 class="main__h1">Facturación Facturama</h1>
+        <p class="main__lead">Subpágina puente para operar el flujo completo de facturación/timbrado usando el módulo Invoicing de Facturama.</p>
       </header>
 
       <section class="panel report-toolbar">
-        <p class="report-toolbar__hint">Para timbrar CFDI en Facturama con el mismo flujo de Invoicing, usa la subpágina dedicada.</p>
-        <a class="btn btn--primary" href="/facturas-emitidas-facturama.html">
+        <p class="report-toolbar__hint" id="facturama-bridge-note">
+          Cargando configuración de Facturama...
+        </p>
+        <a class="btn btn--primary" id="facturama-open-link" href="https://facturacion.cafeintimo.mx" target="_blank" rel="noopener">
           <span class="material-symbols-outlined btn__icon" aria-hidden="true">open_in_new</span>
-          Ir a Facturación Facturama
+          Abrir en nueva pestaña
         </a>
       </section>
 
       <section class="panel report-section">
-        <h2 class="report-section__title">Listado base</h2>
-        <div class="table-wrap table-wrap--sticky-head">
-          <table class="data-table data-table--dense">
-            <thead>
-              <tr>
-                <th>UUID</th>
-                <th>Serie/Folio</th>
-                <th>Fecha</th>
-                <th>RFC cliente</th>
-                <th class="data-table__num">Total</th>
-                <th>Estatus</th>
-                <th>XML</th>
-                <th>PDF</th>
-              </tr>
-            </thead>
-            <tbody id="fe-tbody"></tbody>
-          </table>
-        </div>
+        <h2 class="report-section__title">Vista integrada</h2>
+        <iframe
+          id="facturama-frame"
+          title="Facturación Facturama"
+          style="width:100%;min-height:78vh;border:1px solid var(--intimo-outline);border-radius:10px;background:#fff;"
+          loading="lazy"
+          referrerpolicy="strict-origin-when-cross-origin"
+        ></iframe>
       </section>
     </main>
   </div>
-  <script type="module" src="/js/facturas-emitidas.js"></script>
+  <script type="module" src="/js/facturas-emitidas-facturama.js"></script>
 </body>
 </html>

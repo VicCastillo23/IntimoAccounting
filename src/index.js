@@ -130,6 +130,17 @@ app.get("/api/config/branding", requireAuth, (_req, res) => {
   res.json({ success: true, data: getBrandingForApi() });
 });
 
+app.get("/api/facturama/bridge-config", requireAuth, (_req, res) => {
+  const baseUrl = String(process.env.INVOICING_APP_URL || "https://facturacion.cafeintimo.mx").trim();
+  res.json({
+    success: true,
+    data: {
+      invoicingAppUrl: baseUrl,
+      note: "Subpágina puente hacia el módulo de facturación Facturama.",
+    },
+  });
+});
+
 const DEPTO_VALUES = ["ADMINISTRACION", "SERVICIOS_GENERALES", "OTROS"];
 
 const POLIZA_TYPES = new Set(["DIARIO", "INGRESOS", "EGRESOS", "TRANSFERENCIA"]);
@@ -1192,6 +1203,7 @@ app.get("/activos.html", sendHtmlIfAuthed("activos.html"));
 app.get("/amortizaciones.html", sendHtmlIfAuthed("amortizaciones.html"));
 app.get("/facturas-recibidas.html", sendHtmlIfAuthed("facturas-recibidas.html"));
 app.get("/facturas-emitidas.html", sendHtmlIfAuthed("facturas-emitidas.html"));
+app.get("/facturas-emitidas-facturama.html", sendHtmlIfAuthed("facturas-emitidas-facturama.html"));
 
 const reportPages = [
   "report-balanza.html",

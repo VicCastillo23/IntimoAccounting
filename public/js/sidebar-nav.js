@@ -28,6 +28,12 @@ const NAV_GROUPS = [
     items: [
       { href: "/facturas-recibidas.html", icon: "download", label: "Facturas recibidas", match: { path: "/facturas-recibidas.html" } },
       { href: "/facturas-emitidas.html", icon: "upload", label: "Facturas emitidas", match: { path: "/facturas-emitidas.html" } },
+      {
+        href: "/facturas-emitidas-facturama.html",
+        icon: "receipt_long",
+        label: "Facturacion Facturama",
+        match: { path: "/facturas-emitidas-facturama.html" },
+      },
     ],
   },
   {
