@@ -152,16 +152,8 @@ function deptoSelectOptions(selected) {
   return opts.map(([v, label]) => `<option value="${v}" ${v === d ? "selected" : ""}>${label}</option>`).join("");
 }
 
-/** Catálogo contable (captura en modal). */
-const ACCOUNT_PRESETS = [
-  { code: "401-01", name: "Ventas al 16%" },
-  { code: "401-02", name: "Ventas al 0%" },
-  { code: "207-01", name: "IVA pendiente de trasladar" },
-  { code: "208-01", name: "IVA trasladado" },
-  { code: "101-01", name: "Caja Chica" },
-  { code: "102-01", name: "BBVA cuenta xxxxx" },
-  { code: "106-01", name: "Cuentas por cobrar a corto plazo" },
-];
+/** Catálogo contable (captura en modal) cargado desde /api/catalog/accounts. */
+let ACCOUNT_PRESETS = [];
 
 const ACCOUNT_PRESET_OTHER = "__other__";
 
@@ -214,6 +206,21 @@ function accountPresetOptionsHtml(selectedValue) {
   );
   rows.push(opt(ACCOUNT_PRESET_OTHER, "Otros… (escribe no. cuenta y nombre)"));
   return rows.join("");
+}
+
+async function loadAccountPresets() {
+  const res = await apiFetch("/api/catalog/accounts");
+  await ensureAuthed(res);
+  const json = await res.json();
+  if (!res.ok || !json?.success) throw new Error(json?.message || "No se pudo cargar catálogo de cuentas.");
+  const rows = Array.isArray(json.data) ? json.data : [];
+  ACCOUNT_PRESETS = rows
+    .map((r) => ({
+      code: String(r.num_cta || "").trim(),
+      name: String(r.descripcion || "").trim(),
+    }))
+    .filter((r) => r.code)
+    .sort((a, b) => a.code.localeCompare(b.code, "es", { numeric: true }));
 }
 
 function facturaCellEdit(line, i) {
@@ -392,139 +399,23 @@ function closeCreateModal() {
 
 const createLines = [];
 
-/** Datos de demostración: tickets del día + líneas de resumen (demo; no se guarda hasta Guardar). */
-function getMockNewPolizaTemplate() {
+/** Nueva póliza sin datos prellenados. */
+function getEmptyPolizaTemplate(type = "DIARIO") {
   return {
-    type: "INGRESOS",
-    concept: "Cierre ventas del día — tickets POS (demo)",
-    lines: [
-      {
-        ticketId: "T-0411-0082",
-        accountCode: "101-01",
-        accountName: "Caja Chica",
-        lineConcept: "Venta ticket mostrador",
-        invoiceUrl: "https://example.com/cfdi/ticket-0082.pdf",
-        invoiceXmlUrl: "https://example.com/cfdi/ticket-0082.xml",
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
-        debit: 450,
-        credit: 0,
-      },
-      {
-        ticketId: "T-0411-0083",
-        accountCode: "101-01",
-        accountName: "Caja Chica",
-        lineConcept: "Venta ticket (pendiente factura)",
-        invoiceUrl: "",
-        invoiceXmlUrl: "",
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
-        debit: 320,
-        credit: 0,
-      },
-      {
-        ticketId: "T-0411-0084",
-        accountCode: "101-01",
-        accountName: "Caja Chica",
-        lineConcept: "Venta ticket",
-        invoiceUrl: "https://example.com/cfdi/ticket-0084.pdf",
-        invoiceXmlUrl: "",
-        fxCurrency: "USD",
-        depto: "SERVICIOS_GENERALES",
-        debit: 390,
-        credit: 0,
-      },
-      {
-        ticketId: "",
-        accountCode: "401-01",
-        accountName: "Ventas al 16%",
-        lineConcept: "Consolidado ventas",
-        invoiceUrl: "",
-        invoiceXmlUrl: "",
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
-        debit: 0,
-        credit: 1000,
-      },
-      {
-        ticketId: "",
-        accountCode: "208-01",
-        accountName: "IVA trasladado",
-        lineConcept: "IVA 16 %",
-        invoiceUrl: "",
-        invoiceXmlUrl: "",
-        fxCurrency: "MX",
-        depto: "OTROS",
-        debit: 0,
-        credit: 160,
-      },
-    ],
-  };
-}
-
-/** Plantilla egresos: por defecto salida desde caja chica / efectivo (101-01). */
-function getMockEgresosTemplate() {
-  return {
-    type: "EGRESOS",
-    concept: "Egreso operativo — caja chica / efectivo (demo)",
+    type,
+    concept: "",
     lines: [
       {
         ticketId: "",
-        accountCode: "601-01",
-        accountName: "Gastos generales",
-        lineConcept: "Compra o gasto menor",
-        invoiceUrl: "",
-        invoiceXmlUrl: "",
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
-        debit: 1000,
-        credit: 0,
-      },
-      {
-        ticketId: "",
-        accountCode: "101-01",
-        accountName: "Caja Chica",
-        lineConcept: "Salida de efectivo",
+        accountCode: "",
+        accountName: "",
+        lineConcept: "",
         invoiceUrl: "",
         invoiceXmlUrl: "",
         fxCurrency: "MX",
         depto: "ADMINISTRACION",
         debit: 0,
-        credit: 1000,
-      },
-    ],
-  };
-}
-
-/** Plantilla transferencia: movimiento vía bancos (102-01) frente a caja u otras cuentas. */
-function getMockTransferenciaTemplate() {
-  return {
-    type: "TRANSFERENCIA",
-    concept: "Transferencia entre cuentas — bancos (demo)",
-    lines: [
-      {
-        ticketId: "",
-        accountCode: "102-01",
-        accountName: "BBVA cuenta xxxxx",
-        lineConcept: "Depósito o traspaso a banco",
-        invoiceUrl: "",
-        invoiceXmlUrl: "",
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
-        debit: 500,
         credit: 0,
-      },
-      {
-        ticketId: "",
-        accountCode: "101-01",
-        accountName: "Caja Chica",
-        lineConcept: "Origen efectivo",
-        invoiceUrl: "",
-        invoiceXmlUrl: "",
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
-        debit: 0,
-        credit: 500,
       },
     ],
   };
@@ -534,11 +425,8 @@ function applyTemplateForType(type) {
   if (editingPolizaId) return;
   posDraftSourceRef = null;
   const t = String(type || "").toUpperCase();
-  let tpl;
-  if (t === "EGRESOS") tpl = getMockEgresosTemplate();
-  else if (t === "TRANSFERENCIA") tpl = getMockTransferenciaTemplate();
-  else if (t === "INGRESOS") tpl = getMockNewPolizaTemplate();
-  else return;
+  if (!["DIARIO", "INGRESOS", "EGRESOS", "TRANSFERENCIA"].includes(t)) return;
+  const tpl = getEmptyPolizaTemplate(t);
   createLines.length = 0;
   tpl.lines.forEach((line) => createLines.push({ ...line }));
   const conc = $("#create-concept");
@@ -835,7 +723,7 @@ async function openCreate() {
   posDraftSourceRef = null;
   const title = document.getElementById("modal-create-poliza-title");
   if (title) title.textContent = "Nueva póliza";
-  const tpl = getMockNewPolizaTemplate();
+  const tpl = getEmptyPolizaTemplate("DIARIO");
   createLines.length = 0;
   tpl.lines.forEach((line) => createLines.push({ ...line }));
   renderCreateLinesTable();
@@ -1321,6 +1209,7 @@ async function boot() {
   if (el) el.textContent = j.user.username;
   injectFiscalSidebar(fiscalYear, () => void load());
   initSidebarNav();
+  await loadAccountPresets();
 
   void initPolizaPrintBranding(() => {
     if (viewerMode !== "view" || !selectedId) return null;

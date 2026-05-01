@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital"
+  Version="4.0" Serie="DEM" Folio="1004" Fecha="2026-04-30T15:00:00"
+  SubTotal="75.00" Moneda="MXN" Total="87.00" TipoDeComprobante="I">
+  <cfdi:Emisor Rfc="DDD040404DDD" Nombre="Proveedor Demo Cuatro SA de CV" RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="XAXX010101000" Nombre="PUBLICO EN GENERAL" RegimenFiscalReceptor="616" UsoCFDI="G03" DomicilioFiscalReceptor="64000"/>
+  <cfdi:Impuestos TotalImpuestosTrasladados="12.00" TotalImpuestosRetenidos="0"/>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital Version="1.1" UUID="44444444-4444-4444-8444-444444444444" FechaTimbrado="2026-04-30T15:01:00" RfcProvCertif="DDD040404DDD" NoCertificadoSAT="00001000000405322708" SelloCFD="DEMO" SelloSAT="DEMO"/>
+  </cfdi:Complemento>
+</cfdi:Comprobante>

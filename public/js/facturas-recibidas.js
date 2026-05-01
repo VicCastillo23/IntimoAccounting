@@ -62,12 +62,12 @@ function currentFilters() {
 async function loadReceivedInvoices() {
   const tbody = $("#fr-tbody");
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="8">Cargando...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7">Cargando...</td></tr>`;
   try {
     const data = await api(`/api/invoices/received?${currentFilters()}`);
     const rows = Array.isArray(data.rows) ? data.rows : [];
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="8">Sin resultados.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7">Sin resultados.</td></tr>`;
       return;
     }
     tbody.innerHTML = rows
@@ -81,17 +81,12 @@ async function loadReceivedInvoices() {
         <td class="data-table__num">${fmtMoney(r.total)}</td>
         <td>${escapeHtml((r.status || "").toUpperCase())}</td>
         <td>${escapeHtml(r.source_entry_name || "—")}</td>
-        <td>
-          <button type="button" class="btn btn--text btn--sm fr-view">Ver</button>
-          <button type="button" class="btn btn--ghost btn--sm fr-pay-auto">Pagar auto</button>
-          <button type="button" class="btn btn--ghost btn--sm fr-pay-suggested">Pagar sugerida</button>
-        </td>
       </tr>
     `
       )
       .join("");
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8">No se pudo cargar (${escapeHtml(e.message)}).</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7">No se pudo cargar (${escapeHtml(e.message)}).</td></tr>`;
   }
 }
 
@@ -143,35 +138,12 @@ async function showDetail(id) {
   }
 }
 
-async function payInvoice(id, mode) {
-  try {
-    const data = await api(`/api/invoices/received/${encodeURIComponent(id)}/pay`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode }),
-    });
-    if (mode === "automatic") {
-      setAlert(`Factura pagada y póliza creada (${data.poliza?.folio || data.poliza?.id || "ok"}).`);
-    } else {
-      setAlert("Factura marcada con pago sugerido. Revisa el borrador de póliza en detalle.");
-    }
-    await loadReceivedInvoices();
-    await showDetail(id);
-  } catch (e) {
-    setAlert(e.message, false);
-  }
-}
-
 function wireTableActions() {
   $("#fr-tbody")?.addEventListener("click", async (ev) => {
-    const target = ev.target;
-    if (!(target instanceof HTMLElement)) return;
-    const row = target.closest("tr[data-id]");
+    const row = ev.target instanceof HTMLElement ? ev.target.closest("tr[data-id]") : null;
     const id = row?.getAttribute("data-id");
     if (!id) return;
-    if (target.classList.contains("fr-view")) await showDetail(id);
-    if (target.classList.contains("fr-pay-auto")) await payInvoice(id, "automatic");
-    if (target.classList.contains("fr-pay-suggested")) await payInvoice(id, "suggested");
+    await showDetail(id);
   });
 }
 
