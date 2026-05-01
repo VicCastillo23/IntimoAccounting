@@ -31,7 +31,7 @@ const NAV_GROUPS = [
       {
         href: "/facturas-emitidas-facturama.html",
         icon: "receipt_long",
-        label: "Facturacion Facturama",
+        label: "Facturacion Manual",
         match: { path: "/facturas-emitidas-facturama.html" },
       },
     ],

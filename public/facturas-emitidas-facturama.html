@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#000000" />
-  <title>Íntimo · Facturación Facturama</title>
+  <title>Íntimo · Facturación Manual</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -36,29 +36,73 @@
 
     <main class="main main--report">
       <header class="main__header">
-        <h1 class="main__h1">Facturación Facturama</h1>
-        <p class="main__lead">Subpágina puente para operar el flujo completo de facturación/timbrado usando el módulo Invoicing de Facturama.</p>
+        <h1 class="main__h1">Facturación Manual</h1>
+        <p class="main__lead">Captura manual del receptor para facturación. Al finalizar, abre el módulo Facturama con el flujo operativo de Invoicing.</p>
       </header>
 
       <section class="panel report-toolbar">
         <p class="report-toolbar__hint" id="facturama-bridge-note">
-          Cargando configuración de Facturama...
+          Cargando configuración...
         </p>
         <a class="btn btn--primary" id="facturama-open-link" href="https://facturacion.cafeintimo.mx" target="_blank" rel="noopener">
           <span class="material-symbols-outlined btn__icon" aria-hidden="true">open_in_new</span>
-          Abrir en nueva pestaña
+          Abrir Facturama
         </a>
       </section>
 
       <section class="panel report-section">
-        <h2 class="report-section__title">Vista integrada</h2>
-        <iframe
-          id="facturama-frame"
-          title="Facturación Facturama"
-          style="width:100%;min-height:78vh;border:1px solid var(--intimo-outline);border-radius:10px;background:#fff;"
-          loading="lazy"
-          referrerpolicy="strict-origin-when-cross-origin"
-        ></iframe>
+        <h2 class="report-section__title">Captura de receptor (manual)</h2>
+        <form id="manual-invoice-form" class="report-toolbar report-toolbar__dates--wrap" style="padding:0;border:none;">
+          <label class="report-field">RFC del receptor
+            <input class="report-field__input" id="mi-rfc" type="text" maxlength="13" placeholder="XAXX010101000" required />
+          </label>
+          <label class="report-field">Razón social / Nombre
+            <input class="report-field__input" id="mi-name" type="text" placeholder="Nombre fiscal del receptor" required />
+          </label>
+          <label class="report-field">Régimen fiscal
+            <select class="report-field__input" id="mi-regime" required>
+              <option value="">Selecciona...</option>
+              <option value="601">601 · General de Ley Personas Morales</option>
+              <option value="603">603 · Personas Morales con Fines no Lucrativos</option>
+              <option value="605">605 · Sueldos y Salarios e Ingresos Asimilados</option>
+              <option value="612">612 · Personas Físicas con Actividades Empresariales</option>
+              <option value="616">616 · Sin obligaciones fiscales</option>
+            </select>
+          </label>
+          <label class="report-field">Uso CFDI
+            <select class="report-field__input" id="mi-cfdi-use" required>
+              <option value="G03">G03 · Gastos en general</option>
+              <option value="S01">S01 · Sin efectos fiscales</option>
+              <option value="P01">P01 · Por definir</option>
+            </select>
+          </label>
+          <label class="report-field">Código postal
+            <input class="report-field__input" id="mi-zip" type="text" maxlength="5" placeholder="64000" required />
+          </label>
+          <label class="report-field">Correo electrónico (opcional)
+            <input class="report-field__input" id="mi-email" type="email" placeholder="cliente@correo.com" />
+          </label>
+          <label class="report-field">Calle
+            <input class="report-field__input" id="mi-street" type="text" placeholder="Calle y número" />
+          </label>
+          <label class="report-field">Municipio / Alcaldía
+            <input class="report-field__input" id="mi-city" type="text" placeholder="Municipio" />
+          </label>
+          <label class="report-field">Estado
+            <input class="report-field__input" id="mi-state" type="text" placeholder="Estado" />
+          </label>
+          <label class="report-field">País
+            <input class="report-field__input" id="mi-country" type="text" value="México" />
+          </label>
+          <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+            <button type="button" class="btn btn--ghost" id="mi-validate-rfc">Validar RFC</button>
+            <button type="submit" class="btn btn--primary">
+              <span class="material-symbols-outlined btn__icon" aria-hidden="true">receipt_long</span>
+              Generar factura en Facturama
+            </button>
+            <span class="report-toolbar__hint" id="mi-status">Completa los datos y genera la factura.</span>
+          </div>
+        </form>
       </section>
     </main>
   </div>
