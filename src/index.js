@@ -1218,6 +1218,10 @@ app.post(
   }
 );
 
+/** Timbrado manual Facturama (mismo prefijo que import-zip / poliza-batch para Nginx). */
+app.post("/api/invoices/issued/manual-emitir", requireAuth, handleManualFacturacionEmitir);
+app.get("/api/invoices/issued/manual/:id/download", requireAuth, handleManualFacturacionDownload);
+
 app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
   const fy = resolveFiscalYear(req);
   if (fy == null) {
@@ -1562,11 +1566,8 @@ async function handleManualFacturacionEmitir(req, res) {
 
 app.post("/api/facturacion/manual/emitir", requireAuth, handleManualFacturacionEmitir);
 app.post("/api/facturama/manual/emitir", requireAuth, handleManualFacturacionEmitir);
-/** Misma lógica; prefijo `/api/invoices/issued/` para Nginx que solo proxifica facturas emitidas. */
-app.post("/api/invoices/issued/manual-emitir", requireAuth, handleManualFacturacionEmitir);
 
 app.get("/api/facturacion/manual/:id/download", requireAuth, handleManualFacturacionDownload);
-app.get("/api/invoices/issued/manual/:id/download", requireAuth, handleManualFacturacionDownload);
 
 app.post("/api/pos/purchase-orders", requirePosIngestAuth, async (req, res) => {
   try {
