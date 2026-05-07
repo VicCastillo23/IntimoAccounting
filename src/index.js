@@ -1358,6 +1358,59 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
   }
 });
 
+/** Descarga XML/PDF de un CFDI manual timbrado (Facturama). */
+async function handleManualFacturacionDownload(req, res) {
+  try {
+    if (!facturamaConfigured()) {
+      return res.status(503).json({ success: false, message: "Facturama no configurado." });
+    }
+    const format = String(req.query.format || "xml").toLowerCase();
+    if (!["xml", "pdf"].includes(format)) {
+      return res.status(400).json({ success: false, message: "Formato inválido." });
+    }
+    const key = String(req.params.id || "").trim();
+    const pool = getPool();
+    let facturamaId = key;
+    if (pool) {
+      const { rows } = await pool.query(
+        `SELECT meta
+           FROM invoicing.invoices
+          WHERE upper(coalesce(cfdi_uuid, '')) = upper($1) OR public_id::text = $1
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [key]
+      );
+      const id = rows[0]?.meta?.facturamaId;
+      if (id) facturamaId = String(id);
+    }
+    if (!facturamaId || facturamaId === key) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "No se encontró el identificador de Facturama para esta factura. Revisa que se haya timbrado y guardado correctamente.",
+      });
+    }
+
+    const dl = await downloadFacturamaCfdiById(facturamaId, format);
+    res.setHeader("Content-Type", dl.contentType);
+    res.setHeader("Content-Disposition", `inline; filename="cfdi-manual.${format}"`);
+    res.send(dl.buffer);
+  } catch (e) {
+    const status =
+      (typeof e?.status === "number" && e.status >= 400 && e.status < 600 ? e.status : null) ||
+      e?.response?.status ||
+      500;
+    const msg =
+      e?.body?.Message ||
+      e?.body?.message ||
+      e?.response?.data?.Message ||
+      e?.response?.data?.message ||
+      e?.message ||
+      "No se pudo descargar";
+    res.status(status).json({ success: false, message: String(msg), details: e?.body || null });
+  }
+}
+
 /** Facturación manual vía Facturama (alias legacy: /api/facturama/manual/emitir). */
 async function handleManualFacturacionEmitir(req, res) {
   try {
@@ -1453,8 +1506,9 @@ async function handleManualFacturacionEmitir(req, res) {
     const folio = String(raw?.Folio || payload.Folio || "");
     const issuedAt = String(raw?.Date || new Date().toISOString());
 
-    const xmlPath = `/api/facturacion/manual/${encodeURIComponent(uuid || facturamaId)}/download?format=xml`;
-    const pdfPath = `/api/facturacion/manual/${encodeURIComponent(uuid || facturamaId)}/download?format=pdf`;
+    const manualDlBase = `/api/invoices/issued/manual/${encodeURIComponent(uuid || facturamaId)}/download`;
+    const xmlPath = `${manualDlBase}?format=xml`;
+    const pdfPath = `${manualDlBase}?format=pdf`;
 
     const pool = getPool();
     if (pool) {
@@ -1508,58 +1562,11 @@ async function handleManualFacturacionEmitir(req, res) {
 
 app.post("/api/facturacion/manual/emitir", requireAuth, handleManualFacturacionEmitir);
 app.post("/api/facturama/manual/emitir", requireAuth, handleManualFacturacionEmitir);
+/** Misma lógica; prefijo `/api/invoices/issued/` para Nginx que solo proxifica facturas emitidas. */
+app.post("/api/invoices/issued/manual-emitir", requireAuth, handleManualFacturacionEmitir);
 
-app.get("/api/facturacion/manual/:id/download", requireAuth, async (req, res) => {
-  try {
-    if (!facturamaConfigured()) {
-      return res.status(503).json({ success: false, message: "Facturama no configurado." });
-    }
-    const format = String(req.query.format || "xml").toLowerCase();
-    if (!["xml", "pdf"].includes(format)) {
-      return res.status(400).json({ success: false, message: "Formato inválido." });
-    }
-    const key = String(req.params.id || "").trim();
-    const pool = getPool();
-    let facturamaId = key;
-    if (pool) {
-      const { rows } = await pool.query(
-        `SELECT meta
-           FROM invoicing.invoices
-          WHERE upper(coalesce(cfdi_uuid, '')) = upper($1) OR public_id::text = $1
-          ORDER BY created_at DESC
-          LIMIT 1`,
-        [key]
-      );
-      const id = rows[0]?.meta?.facturamaId;
-      if (id) facturamaId = String(id);
-    }
-    if (!facturamaId || facturamaId === key) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "No se encontró el identificador de Facturama para esta factura. Revisa que se haya timbrado y guardado correctamente.",
-      });
-    }
-
-    const dl = await downloadFacturamaCfdiById(facturamaId, format);
-    res.setHeader("Content-Type", dl.contentType);
-    res.setHeader("Content-Disposition", `inline; filename="cfdi-manual.${format}"`);
-    res.send(dl.buffer);
-  } catch (e) {
-    const status =
-      (typeof e?.status === "number" && e.status >= 400 && e.status < 600 ? e.status : null) ||
-      e?.response?.status ||
-      500;
-    const msg =
-      e?.body?.Message ||
-      e?.body?.message ||
-      e?.response?.data?.Message ||
-      e?.response?.data?.message ||
-      e?.message ||
-      "No se pudo descargar";
-    res.status(status).json({ success: false, message: String(msg), details: e?.body || null });
-  }
-});
+app.get("/api/facturacion/manual/:id/download", requireAuth, handleManualFacturacionDownload);
+app.get("/api/invoices/issued/manual/:id/download", requireAuth, handleManualFacturacionDownload);
 
 app.post("/api/pos/purchase-orders", requirePosIngestAuth, async (req, res) => {
   try {

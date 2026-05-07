@@ -221,7 +221,7 @@ function wireManualForm() {
     if (regimeErr) return setStatus(regimeErr, false);
     setStatus("Timbrando factura en Facturama...");
     try {
-      const res = await fetch("/api/facturacion/manual/emitir", {
+      const res = await fetch("/api/invoices/issued/manual-emitir", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
