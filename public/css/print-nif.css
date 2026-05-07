@@ -137,14 +137,16 @@
   }
 
   .report-section {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    /* Evita hojas en blanco cuando una sección es más alta que el espacio restante. */
+    break-inside: auto;
+    page-break-inside: auto;
     box-shadow: none !important;
     border: 1px solid #999 !important;
   }
 
   .report-section__title {
     font-size: 11pt !important;
+    page-break-after: avoid !important;
   }
 
   .report-financial-statement {
@@ -153,11 +155,6 @@
 
   .report-financial-statement__table {
     font-size: 9.5pt !important;
-  }
-
-  /* Secciones que en pantalla son solo título + gráfico (sin tablas útiles al imprimir). */
-  .report-hide-print {
-    display: none !important;
   }
 
   /* Reportería: gráficos (Chart.js) no deben aparecer en papel ni PDF. */
