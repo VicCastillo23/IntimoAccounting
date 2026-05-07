@@ -1,6 +1,7 @@
 import { initMobileNav } from "./mobile-nav.js";
 import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
 import { initSidebarNav } from "./sidebar-nav.js";
+import { applyShellBranding } from "./shell-branding.js";
 
 /**
  * Sesión + ejercicio fiscal + logout en páginas con el mismo shell lateral.
@@ -15,6 +16,7 @@ export async function initAuthShell(options = {}) {
   }
   const el = document.getElementById("session-user");
   if (el) el.textContent = j.user.username;
+  applyShellBranding();
 
   let fiscalYear = j.fiscalYear;
   if (fiscalYear == null) {

@@ -24,6 +24,13 @@ function noDb() {
   return { ok: false, reason: "no_database" };
 }
 
+function splitDebitCreditFromNet(net) {
+  return {
+    deudor: net > 0 ? net : 0,
+    acreedor: net < 0 ? -net : 0,
+  };
+}
+
 /** @param {string} iso YYYY-MM-DD */
 function dayBefore(iso) {
   const d = new Date(`${iso}T12:00:00`);
@@ -179,7 +186,23 @@ export async function getReportsDashboard(range) {
   try {
     const openingDate = dayBefore(from);
 
-    const { rows: tbRows } = await client.query(
+    const { rows: openingTbRows } = await client.query(
+      `
+      SELECT
+        pl.account_code AS account_code,
+        MAX(pl.account_name) AS account_name,
+        COALESCE(SUM(pl.debit), 0)::float8 AS debit,
+        COALESCE(SUM(pl.credit), 0)::float8 AS credit
+      FROM accounting.poliza_lines pl
+      INNER JOIN accounting.polizas p ON p.id = pl.poliza_id
+      WHERE p.poliza_date < $1::date
+      GROUP BY pl.account_code
+      ORDER BY pl.account_code
+      `,
+      [from]
+    );
+
+    const { rows: tbMovRows } = await client.query(
       `
       SELECT
         pl.account_code AS account_code,
@@ -195,21 +218,66 @@ export async function getReportsDashboard(range) {
       [from, to]
     );
 
+    const byCode = new Map();
+    for (const r of openingTbRows) {
+      const code = String(r.account_code || "").trim();
+      if (!code) continue;
+      byCode.set(code, {
+        accountCode: code,
+        accountName: String(r.account_name || "").trim(),
+        openingDebit: Number(r.debit) || 0,
+        openingCredit: Number(r.credit) || 0,
+        periodDebit: 0,
+        periodCredit: 0,
+      });
+    }
+    for (const r of tbMovRows) {
+      const code = String(r.account_code || "").trim();
+      if (!code) continue;
+      const cur = byCode.get(code) || {
+        accountCode: code,
+        accountName: String(r.account_name || "").trim(),
+        openingDebit: 0,
+        openingCredit: 0,
+        periodDebit: 0,
+        periodCredit: 0,
+      };
+      if (!cur.accountName) cur.accountName = String(r.account_name || "").trim();
+      cur.periodDebit = Number(r.debit) || 0;
+      cur.periodCredit = Number(r.credit) || 0;
+      byCode.set(code, cur);
+    }
+
+    let totalOpeningDeudor = 0;
+    let totalOpeningAcreedor = 0;
     let totalDebit = 0;
     let totalCredit = 0;
-    const trialBalance = tbRows.map((r) => {
-      const d = Number(r.debit) || 0;
-      const c = Number(r.credit) || 0;
+    let totalClosingDeudor = 0;
+    let totalClosingAcreedor = 0;
+    const trialBalance = [...byCode.values()]
+      .sort((a, b) => a.accountCode.localeCompare(b.accountCode, "es-MX"))
+      .map((r) => {
+      const openingNet = r.openingDebit - r.openingCredit;
+      const openingSplit = splitDebitCreditFromNet(openingNet);
+      const d = r.periodDebit;
+      const c = r.periodCredit;
+      const closingNet = openingNet + (d - c);
+      const closingSplit = splitDebitCreditFromNet(closingNet);
+      totalOpeningDeudor += openingSplit.deudor;
+      totalOpeningAcreedor += openingSplit.acreedor;
       totalDebit += d;
       totalCredit += c;
-      const net = d - c;
+      totalClosingDeudor += closingSplit.deudor;
+      totalClosingAcreedor += closingSplit.acreedor;
       return {
-        accountCode: r.account_code,
-        accountName: r.account_name,
+        accountCode: r.accountCode,
+        accountName: r.accountName,
+        openingSaldoDeudor: openingSplit.deudor,
+        openingSaldoAcreedor: openingSplit.acreedor,
         debit: d,
         credit: c,
-        saldoDeudor: net > 0 ? net : 0,
-        saldoAcreedor: net < 0 ? -net : 0,
+        saldoDeudor: closingSplit.deudor,
+        saldoAcreedor: closingSplit.acreedor,
       };
     });
 
@@ -352,10 +420,20 @@ export async function getReportsDashboard(range) {
       polizasEnPeriodo: cnt[0]?.n ?? 0,
       trialBalance,
       totals: {
+        openingDeudor: totalOpeningDeudor,
+        openingAcreedor: totalOpeningAcreedor,
         debit: totalDebit,
         credit: totalCredit,
         diff: Math.abs(totalDebit - totalCredit),
+        closingDeudor: totalClosingDeudor,
+        closingAcreedor: totalClosingAcreedor,
       },
+      openingBalances: trialBalance.map((r) => ({
+        accountCode: r.accountCode,
+        accountName: r.accountName,
+        saldoDeudor: r.openingSaldoDeudor,
+        saldoAcreedor: r.openingSaldoAcreedor,
+      })),
       incomeStatement: {
         ingresos,
         costos,

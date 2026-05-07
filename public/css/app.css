@@ -157,6 +157,13 @@ body.nav-drawer-open .nav-backdrop {
   gap: 0.75rem;
 }
 
+.sidebar__brand-icon {
+  width: min(140px, 80%);
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
 .sidebar__wordmark {
   font-size: 1.5rem;
   font-weight: 700;
@@ -2158,6 +2165,10 @@ select.field__input--select:disabled {
   max-width: min(1680px, 100vw - 2rem);
 }
 
+.main--report-invoices {
+  max-width: min(1500px, 100vw - 1.5rem);
+}
+
 .report-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -3005,7 +3016,7 @@ select.field__input--select:disabled {
 }
 
 .fr-xml {
-  max-height: 18rem;
+  max-height: 30rem;
   overflow: auto;
   margin: 0.5rem 0 0;
   padding: 0.6rem;
@@ -3014,4 +3025,141 @@ select.field__input--select:disabled {
   font-size: 0.75rem;
   line-height: 1.35;
   background: #fafafa;
+}
+
+.fr-xml--pretty {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-color: #2f2f2f;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fr-xml-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.62;
+}
+
+.fr-xml--pretty .xml-tag {
+  color: #569cd6;
+}
+
+.fr-xml--pretty .xml-attr {
+  color: #9cdcfe;
+}
+
+.fr-xml--pretty .xml-value {
+  color: #ce9178;
+}
+
+.fr-xml--pretty .xml-comment {
+  color: #6a9955;
+}
+
+.fr-xml--pretty .xml-punc {
+  color: #d4d4d4;
+}
+
+/* Facturas recibidas: mejorar legibilidad de filas en listado */
+#fr-tbody td {
+  padding: 0.78rem 0.55rem !important;
+  vertical-align: top;
+  line-height: 1.35;
+}
+
+#fr-tbody td:nth-child(2) {
+  min-width: 12.5rem;
+  max-width: 12.5rem;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+#fr-tbody td:nth-child(3),
+#fr-tbody td:nth-child(4),
+#fr-tbody td:nth-child(11) {
+  max-width: 10rem;
+  overflow-wrap: anywhere;
+}
+
+#fr-tbody td:nth-child(12),
+#fr-tbody td:nth-child(13) {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.fr-uuid-two-line {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  row-gap: 0.12rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.fr-uuid-two-line > span {
+  display: block;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.fr-table-wrap {
+  overflow-x: visible;
+}
+
+#fr-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#fr-table thead th,
+#fr-table tbody td {
+  overflow-wrap: anywhere;
+}
+
+/* Facturas emitidas: espejo de recibidas (tabla legible y sin scroll horizontal) */
+#fe-tbody td {
+  padding: 0.78rem 0.55rem !important;
+  vertical-align: top;
+  line-height: 1.35;
+}
+
+#fe-tbody td:nth-child(2) {
+  min-width: 12.5rem;
+  max-width: 12.5rem;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+#fe-tbody td:nth-child(3),
+#fe-tbody td:nth-child(5) {
+  max-width: 10rem;
+  overflow-wrap: anywhere;
+}
+
+#fe-tbody td:nth-child(8),
+#fe-tbody td:nth-child(9),
+#fe-tbody td:nth-child(10) {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.fe-table-wrap {
+  overflow-x: visible;
+}
+
+#fe-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#fe-table thead th,
+#fe-table tbody td {
+  overflow-wrap: anywhere;
 }

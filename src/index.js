@@ -26,7 +26,7 @@ import {
   createChartAccount,
   updateChartAccount,
 } from "./store/catalogStore.js";
-import { checkDb, ensureDatabaseExistsIfNeeded } from "./db/pool.js";
+import { checkDb, ensureDatabaseExistsIfNeeded, getPool } from "./db/pool.js";
 import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
 import { getLedgerAuxiliarMayor, getReportsDashboard } from "./store/reportsStore.js";
 import { upsertPosPurchaseOrder, buildPosDayPolizaDraft } from "./store/posIngestStore.js";
@@ -45,14 +45,22 @@ import {
 } from "./store/depreciacionStore.js";
 import {
   importReceivedInvoicesZip,
+  importIssuedInvoicesZip,
   listReceivedInvoices,
   getReceivedInvoiceById,
   updateReceivedInvoiceStatus,
   listIssuedInvoicesBase,
+  getIssuedInvoicesByPrefixedIds,
+  getIssuedInvoiceDetailByPrefixedId,
   linkPaidReceivedInvoice,
 } from "./store/receivedInvoicesStore.js";
 import { calcularFactorActualizacion } from "./services/inegiInpc.js";
 import { getBrandingForApi } from "./config/branding.js";
+import {
+  downloadFacturamaCfdiById,
+  ensureFacturamaCsdFromEnv,
+  stampFacturamaCfdi,
+} from "./services/facturamaClient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
@@ -185,6 +193,132 @@ function respondStoreError(res, out, fallbackMessage) {
     return res.status(404).json({ success: false, message: out.message || "No encontrado.", code: out.reason });
   }
   return res.status(400).json({ success: false, message: out.message || fallbackMessage, code: out.reason });
+}
+
+function round2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+function formatCfdiEmissionDateMexico(d = new Date()) {
+  const wall = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(d);
+  const wallIso = wall.replace(" ", "T");
+  const tzPart =
+    new Intl.DateTimeFormat("en", {
+      timeZone: "America/Mexico_City",
+      timeZoneName: "longOffset",
+    })
+      .formatToParts(d)
+      .find((p) => p.type === "timeZoneName")?.value || "";
+  const m = tzPart.match(/GMT([+-])(\d{2}):(\d{2})/);
+  const offsetIso = m ? `${m[1]}${m[2]}:${m[3]}` : "-06:00";
+  return `${wallIso}${offsetIso}`;
+}
+
+const DEFAULT_EMISOR_NAME_BY_RFC = {
+  EKU9003173C9: "ESCUELA KEMPER URGATE",
+};
+
+function isGenericOrForeignRfc(rfc) {
+  const v = String(rfc || "").trim().toUpperCase();
+  return v === "XAXX010101000" || v === "XEXX010101000";
+}
+
+function facturamaConfigured() {
+  return Boolean(process.env.FACTURAMA_USER?.trim() && process.env.FACTURAMA_PASSWORD?.trim());
+}
+
+function buildManualCfdiPayload(data) {
+  const emisorRfc = String(process.env.FACTURAMA_EMISOR_RFC || "").trim().toUpperCase();
+  const emisorName =
+    String(process.env.FACTURAMA_EMISOR_NAME || "").trim() || DEFAULT_EMISOR_NAME_BY_RFC[emisorRfc] || "";
+  const emisorRegime = String(process.env.FACTURAMA_EMISOR_FISCAL_REGIME || "601").trim();
+  const expPlace = String(process.env.FACTURAMA_EXPEDITION_PLACE || "42501").trim();
+  const serie = String(process.env.FACTURAMA_CFDI_SERIE || "INT").trim();
+  const productCode = String(process.env.FACTURAMA_PRODUCT_CODE || "90101500").trim();
+  const unitLabel = String(process.env.FACTURAMA_CFDI_UNIT_LABEL || "Unidad de servicio").trim();
+  const unitCode = String(process.env.FACTURAMA_CFDI_UNIT_CODE || "E48").trim();
+  const paymentForm = String(process.env.FACTURAMA_PAYMENT_FORM || "28").trim();
+  const taxRate = Number(process.env.FACTURAMA_MANUAL_TAX_RATE || 0.16) || 0.16;
+
+  const concepts = Array.isArray(data.concepts) ? data.concepts : [];
+  const items = concepts.map((c) => {
+    const lineTotal = round2(c.total);
+    const lineTaxRate = Number(c.taxRate) >= 0 ? Number(c.taxRate) : taxRate;
+    const subtotal = round2(lineTotal / (1 + lineTaxRate));
+    const iva = round2(lineTotal - subtotal);
+    return {
+      ProductCode: String(c.productCode || productCode).trim() || productCode,
+      Description: String(c.description || "").trim(),
+      Unit: String(c.unitLabel || unitLabel).trim() || unitLabel,
+      UnitCode: String(c.unitCode || unitCode).trim() || unitCode,
+      UnitPrice: subtotal,
+      Quantity: 1,
+      Subtotal: subtotal,
+      TaxObject: "02",
+      Taxes: [{ Total: iva, Name: "IVA", Base: subtotal, Rate: lineTaxRate, IsRetention: false }],
+      Total: lineTotal,
+    };
+  });
+  const folio = `MAN-${Date.now().toString(36).toUpperCase()}`;
+  const now = formatCfdiEmissionDateMexico();
+  const receiverTaxZip = isGenericOrForeignRfc(data.rfc) ? expPlace : data.zipCode;
+  const receiverBlock = {
+    Rfc: data.rfc,
+    Name: data.legalName,
+    CfdiUse: data.cfdiUse,
+    FiscalRegime: data.taxRegime,
+    TaxZipCode: receiverTaxZip,
+  };
+  const street = String(data.street || "").trim();
+  const exteriorNumber = String(data.extNumber || "").trim();
+  const neighborhood = String(data.colony || "").trim();
+  const municipality = String(data.municipality || "").trim();
+  const state = String(data.state || "").trim();
+  const country = String(data.country || "México").trim() || "México";
+  if (street && exteriorNumber && neighborhood && municipality && state) {
+    receiverBlock.Address = {
+      Street: street.slice(0, 100),
+      ExteriorNumber: exteriorNumber.slice(0, 30),
+      Neighborhood: neighborhood.slice(0, 80),
+      ZipCode: String(receiverTaxZip || "").trim(),
+      Municipality: municipality.slice(0, 100),
+      State: state.slice(0, 100),
+      Country: country.slice(0, 50),
+    };
+    const int = String(data.intNumber || "").trim();
+    const loc = String(data.locality || "").trim();
+    if (int) receiverBlock.Address.InteriorNumber = int.slice(0, 30);
+    if (loc) receiverBlock.Address.Locality = loc.slice(0, 80);
+  }
+
+  return {
+    NameId: 1,
+    Date: now,
+    Serie: serie,
+    Folio: folio,
+    CfdiType: "I",
+    Currency: "MXN",
+    PaymentForm: paymentForm,
+    PaymentMethod: "PUE",
+    Exportation: "01",
+    ExpeditionPlace: expPlace,
+    Issuer: {
+      Rfc: emisorRfc,
+      Name: emisorName,
+      FiscalRegime: emisorRegime,
+    },
+    Receiver: receiverBlock,
+    Items: items,
+  };
 }
 
 app.post("/api/session/fiscal-year", requireAuth, handleSetFiscalYear);
@@ -750,6 +884,31 @@ app.get("/api/invoices/received/:id", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/invoices/received/:id/download", requireAuth, async (req, res) => {
+  try {
+    const format = String(req.query.format || "xml").toLowerCase();
+    if (!["xml", "pdf"].includes(format)) {
+      return res.status(400).json({ success: false, message: "Formato inválido." });
+    }
+    const out = await getReceivedInvoiceById(req.params.id);
+    if (!out.ok) return respondStoreError(res, out, "No se pudo consultar la factura recibida.");
+    if (format === "pdf") {
+      return res.status(404).json({
+        success: false,
+        message: "Esta factura recibida no tiene PDF almacenado. Solo XML importado del SAT.",
+      });
+    }
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Content-Disposition", `inline; filename="factura-recibida.xml"`);
+    res.send(String(out.row?.xml_raw || ""));
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al descargar factura recibida",
+    });
+  }
+});
+
 app.patch("/api/invoices/received/:id/status", requireAuth, async (req, res) => {
   try {
     const status = String(req.body?.status || "").toLowerCase();
@@ -787,11 +946,25 @@ app.post("/api/invoices/received/:id/pay", requireAuth, async (req, res) => {
     const invoiceOut = await getReceivedInvoiceById(req.params.id);
     if (!invoiceOut.ok) return respondStoreError(res, invoiceOut, "No se encontró la factura.");
     const inv = invoiceOut.row;
+    if (mode === "automatic" && inv?.poliza_id) {
+      return res.status(409).json({
+        success: false,
+        message: "Esta factura ya está vinculada a una póliza y no puede generar otra.",
+      });
+    }
     const total = Number(inv.total || 0);
     const provider = String(inv.issuer_rfc || "").trim();
+    const requestedPolizaDate = String(req.body?.polizaDate || "").slice(0, 10);
     const dateCandidate = String(inv.issued_at || "").slice(0, 10);
-    const yCandidate = yearOfIsoDate(dateCandidate);
-    const polizaDate = yCandidate === fy ? dateCandidate : `${fy}-12-31`;
+    const fallbackDate = /^\d{4}-\d{2}-\d{2}$/.test(dateCandidate) ? dateCandidate : `${fy}-12-31`;
+    const polizaDate = requestedPolizaDate || fallbackDate;
+    const yPoliza = yearOfIsoDate(polizaDate);
+    if (yPoliza == null || yPoliza !== fy) {
+      return res.status(400).json({
+        success: false,
+        message: "La fecha de la póliza debe pertenecer al ejercicio fiscal activo.",
+      });
+    }
 
     const draft = {
       type: "EGRESOS",
@@ -812,7 +985,7 @@ app.post("/api/invoices/received/:id/pay", requireAuth, async (req, res) => {
           credit: 0,
           lineConcept: "Liquidación de proveedor",
           invoiceUrl: "",
-          invoiceXmlUrl: "",
+          invoiceXmlUrl: `/api/invoices/received/${encodeURIComponent(String(inv.public_id || ""))}/download?format=xml`,
           fxCurrency: "MX",
           depto: "ADMINISTRACION",
         },
@@ -824,7 +997,7 @@ app.post("/api/invoices/received/:id/pay", requireAuth, async (req, res) => {
           credit: total,
           lineConcept: "Salida de bancos",
           invoiceUrl: "",
-          invoiceXmlUrl: "",
+          invoiceXmlUrl: `/api/invoices/received/${encodeURIComponent(String(inv.public_id || ""))}/download?format=xml`,
           fxCurrency: "MX",
           depto: "ADMINISTRACION",
         },
@@ -872,6 +1045,110 @@ app.post("/api/invoices/received/:id/pay", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/invoices/received/pay-batch", requireAuth, async (req, res) => {
+  const fy = resolveFiscalYear(req);
+  if (fy == null) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecciona un ejercicio fiscal antes de registrar pagos.",
+    });
+  }
+  try {
+    const invoiceIdsRaw = Array.isArray(req.body?.invoiceIds) ? req.body.invoiceIds : [];
+    const invoiceIds = [...new Set(invoiceIdsRaw.map((x) => String(x || "").trim()).filter(Boolean))];
+    if (!invoiceIds.length) {
+      return res.status(400).json({ success: false, message: "Selecciona al menos una factura." });
+    }
+    const polizaDate = String(req.body?.polizaDate || "").slice(0, 10);
+    const yPoliza = yearOfIsoDate(polizaDate);
+    if (yPoliza == null || yPoliza !== fy) {
+      return res.status(400).json({
+        success: false,
+        message: "La fecha de la póliza debe pertenecer al ejercicio fiscal activo.",
+      });
+    }
+
+    /** @type {Array<any>} */
+    const invoices = [];
+    for (const id of invoiceIds) {
+      const out = await getReceivedInvoiceById(id);
+      if (!out.ok) return respondStoreError(res, out, "No se encontró una factura seleccionada.");
+      if (String(out.row?.status || "") !== "pending") {
+        return res.status(409).json({
+          success: false,
+          message: `Solo se pueden incluir facturas pendientes. ID: ${id}`,
+        });
+      }
+      invoices.push(out.row);
+    }
+
+    const lines = [];
+    for (const inv of invoices) {
+      const provider = String(inv.issuer_rfc || "PROVEEDOR").trim() || "PROVEEDOR";
+      const amount = Number(inv.total || 0);
+      const ref = String(inv.cfdi_uuid || `${inv.series || ""}${inv.folio || ""}` || inv.public_id || "").trim();
+      lines.push({
+        ticketId: "",
+        accountCode: "201.01.001",
+        accountName: `Proveedores ${provider}`.trim(),
+        debit: amount,
+        credit: 0,
+        lineConcept: `Liquidación factura ${ref}`.trim(),
+        invoiceUrl: "",
+        invoiceXmlUrl: `/api/invoices/received/${encodeURIComponent(String(inv.public_id || ""))}/download?format=xml`,
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+      });
+      lines.push({
+        ticketId: "",
+        accountCode: "102.01.001",
+        accountName: "Bancos",
+        debit: 0,
+        credit: amount,
+        lineConcept: `Salida de bancos factura ${ref}`.trim(),
+        invoiceUrl: "",
+        invoiceXmlUrl: `/api/invoices/received/${encodeURIComponent(String(inv.public_id || ""))}/download?format=xml`,
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+      });
+    }
+
+    const concept = `Pago facturas recibidas (${invoices.length})`;
+    const saved = await saveNewPoliza({
+      type: "EGRESOS",
+      concept,
+      polizaDate,
+      lines: lines.map(normPolizaLine),
+      sourceRef: {
+        module: "invoicing-received",
+        mode: "automatic-batch",
+        invoicePublicIds: invoices.map((i) => i.public_id),
+      },
+    });
+
+    for (const inv of invoices) {
+      const linkOut = await linkPaidReceivedInvoice(String(inv.public_id), String(saved.id), "automatic");
+      if (!linkOut.ok) return respondStoreError(res, linkOut, "No se pudo vincular una factura al pago.");
+    }
+
+    res.status(201).json({
+      success: true,
+      data: {
+        poliza: saved,
+        linkedCount: invoices.length,
+      },
+    });
+  } catch (e) {
+    const errCode = e && typeof e === "object" && "code" in e ? String(/** @type {{code?: string}} */ (e).code) : "";
+    const conflict = errCode === "TICKET_IN_USE" || errCode === "TICKET_DUP_LINE";
+    res.status(conflict ? 409 : 500).json({
+      success: false,
+      code: errCode || undefined,
+      message: e instanceof Error ? e.message : "Error al registrar pago masivo de facturas",
+    });
+  }
+});
+
 app.get("/api/invoices/issued", requireAuth, async (req, res) => {
   try {
     const out = await listIssuedInvoicesBase({
@@ -885,6 +1162,398 @@ app.get("/api/invoices/issued", requireAuth, async (req, res) => {
       success: false,
       message: e instanceof Error ? e.message : "Error al consultar facturas emitidas",
     });
+  }
+});
+
+app.get("/api/invoices/issued/:id", requireAuth, async (req, res) => {
+  try {
+    const out = await getIssuedInvoiceDetailByPrefixedId(req.params.id);
+    if (!out.ok) return respondStoreError(res, out, "No se pudo consultar la factura emitida.");
+    res.json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al consultar factura emitida",
+    });
+  }
+});
+
+app.post(
+  "/api/invoices/issued/import-zip",
+  requireAuth,
+  (req, res, next) => {
+    uploadInvoicesZip.single("file")(req, res, (err) => {
+      if (err) {
+        const msg =
+          err.code === "LIMIT_FILE_SIZE"
+            ? "Archivo demasiado grande (máx. 30 MB)."
+            : err.message || "Error al recibir el ZIP.";
+        return res.status(400).json({ success: false, message: msg });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const f = req.file;
+      if (!f?.buffer) {
+        return res.status(400).json({ success: false, message: "Adjunta un archivo ZIP con CFDI XML emitidos." });
+      }
+      const name = String(f.originalname || "").toLowerCase();
+      if (!name.endsWith(".zip")) {
+        return res.status(400).json({ success: false, message: "Formato no soportado. Usa un .zip del SAT." });
+      }
+      const out = await importIssuedInvoicesZip(f.buffer, {
+        sourceName: f.originalname || "cfdi-emitidas.zip",
+        uploadedBy: String(req.session?.username || ""),
+      });
+      if (!out.ok) return respondStoreError(res, out, "No se pudo importar el ZIP de emitidas.");
+      res.status(201).json({ success: true, data: out });
+    } catch (e) {
+      res.status(500).json({
+        success: false,
+        message: e instanceof Error ? e.message : "Error al importar ZIP de facturas emitidas",
+      });
+    }
+  }
+);
+
+app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
+  const fy = resolveFiscalYear(req);
+  if (fy == null) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecciona un ejercicio fiscal antes de registrar pólizas.",
+    });
+  }
+  try {
+    const idsRaw = Array.isArray(req.body?.invoiceIds) ? req.body.invoiceIds : [];
+    const invoiceIds = [...new Set(idsRaw.map((x) => String(x || "").trim()).filter(Boolean))];
+    if (!invoiceIds.length) {
+      return res.status(400).json({ success: false, message: "Selecciona al menos una factura emitida." });
+    }
+    const polizaDate = String(req.body?.polizaDate || "").slice(0, 10);
+    const yPoliza = yearOfIsoDate(polizaDate);
+    if (yPoliza == null || yPoliza !== fy) {
+      return res.status(400).json({
+        success: false,
+        message: "La fecha de la póliza debe pertenecer al ejercicio fiscal activo.",
+      });
+    }
+    const out = await getIssuedInvoicesByPrefixedIds(invoiceIds);
+    if (!out.ok) return respondStoreError(res, out, "No se pudieron consultar las facturas emitidas.");
+    const rows = out.rows || [];
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "No se encontraron facturas emitidas seleccionadas." });
+    }
+    const found = new Set(rows.map((r) => String(r.id)));
+    for (const id of invoiceIds) {
+      if (!found.has(id)) {
+        return res.status(404).json({ success: false, message: `Factura no encontrada: ${id}` });
+      }
+    }
+    const alreadyLinkedBySourceRef = rows.filter((r) => String(r.poliza_folio || "").trim());
+    /** @type {Map<string, string>} */
+    const linkedByInvoiceUrl = new Map();
+    const pool = getPool();
+    if (pool) {
+      const invoiceUrls = [...new Set(rows.map((r) => String(r.pdf_url || "").trim()).filter(Boolean))];
+      const invoiceXmlUrls = [...new Set(rows.map((r) => String(r.xml_url || "").trim()).filter(Boolean))];
+      if (invoiceUrls.length || invoiceXmlUrls.length) {
+        const { rows: linkedRows } = await pool.query(
+          `
+          SELECT p.folio, pl.invoice_url, pl.invoice_xml_url
+          FROM accounting.poliza_lines pl
+          INNER JOIN accounting.polizas p ON p.id = pl.poliza_id
+          WHERE (cardinality($1::text[]) > 0 AND pl.invoice_url = ANY($1::text[]))
+             OR (cardinality($2::text[]) > 0 AND pl.invoice_xml_url = ANY($2::text[]))
+          `,
+          [invoiceUrls, invoiceXmlUrls]
+        );
+        const byUrl = new Map();
+        for (const lr of linkedRows) {
+          const folio = String(lr.folio || "").trim();
+          const u1 = String(lr.invoice_url || "").trim();
+          const u2 = String(lr.invoice_xml_url || "").trim();
+          if (folio && u1 && !byUrl.has(u1)) byUrl.set(u1, folio);
+          if (folio && u2 && !byUrl.has(u2)) byUrl.set(u2, folio);
+        }
+        for (const r of rows) {
+          const hit =
+            byUrl.get(String(r.xml_url || "").trim()) ||
+            byUrl.get(String(r.pdf_url || "").trim()) ||
+            "";
+          if (hit) linkedByInvoiceUrl.set(String(r.id), hit);
+        }
+      }
+    }
+    const alreadyLinked = rows.filter(
+      (r) => String(r.poliza_folio || "").trim() || linkedByInvoiceUrl.has(String(r.id))
+    );
+    if (alreadyLinked.length) {
+      const folios = [...new Set(alreadyLinked.map((x) => String(x.poliza_folio || linkedByInvoiceUrl.get(String(x.id)) || "").trim()).filter(Boolean))];
+      return res.status(409).json({
+        success: false,
+        message: `Hay ${alreadyLinked.length} factura(s) emitida(s) que ya tienen póliza (${folios.slice(0, 3).join(", ")}).`,
+      });
+    }
+
+    const lines = [];
+    for (const r of rows) {
+      const amount = Number(r.total || 0);
+      const customer = String(r.customer_rfc || "CLIENTES DIVERSOS").trim() || "CLIENTES DIVERSOS";
+      const ref = String(r.cfdi_uuid || `${r.series || ""}${r.folio || ""}` || r.public_id || "").trim();
+      lines.push({
+        ticketId: "",
+        accountCode: "102.01.001",
+        accountName: "Bancos",
+        debit: amount,
+        credit: 0,
+        lineConcept: `Cobro factura emitida ${ref || customer}`.trim(),
+        invoiceUrl: String(r.pdf_url || "").trim(),
+        invoiceXmlUrl: String(r.xml_url || "").trim(),
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+      });
+      lines.push({
+        ticketId: "",
+        accountCode: "401.01.001",
+        accountName: "Ingresos por ventas",
+        debit: 0,
+        credit: amount,
+        lineConcept: `Ingreso por factura emitida ${ref || customer}`.trim(),
+        invoiceUrl: String(r.pdf_url || "").trim(),
+        invoiceXmlUrl: String(r.xml_url || "").trim(),
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+      });
+    }
+
+    const saved = await saveNewPoliza({
+      type: "INGRESOS",
+      concept: `Cobro facturas emitidas (${rows.length})`,
+      polizaDate,
+      lines: lines.map(normPolizaLine),
+      sourceRef: {
+        module: "invoicing-issued",
+        mode: "automatic-batch",
+        invoiceIds,
+      },
+    });
+    res.status(201).json({
+      success: true,
+      data: {
+        poliza: saved,
+        linkedCount: rows.length,
+      },
+    });
+  } catch (e) {
+    const errCode = e && typeof e === "object" && "code" in e ? String(/** @type {{code?: string}} */ (e).code) : "";
+    const conflict = errCode === "TICKET_IN_USE" || errCode === "TICKET_DUP_LINE";
+    res.status(conflict ? 409 : 500).json({
+      success: false,
+      code: errCode || undefined,
+      message: e instanceof Error ? e.message : "Error al registrar póliza masiva de facturas emitidas",
+    });
+  }
+});
+
+app.post("/api/facturacion/manual/emitir", requireAuth, async (req, res) => {
+  try {
+    if (!facturamaConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: "Facturama no configurado en Accounting (FACTURAMA_USER / FACTURAMA_PASSWORD).",
+      });
+    }
+    const receiver = req.body?.receiver || {};
+    const invoice = req.body?.invoice || {};
+    const rfc = String(receiver.rfc || "").trim().toUpperCase();
+    const legalName = String(receiver.legalName || "").trim();
+    const taxRegime = String(receiver.taxRegime || "").trim();
+    const cfdiUse = String(receiver.cfdiUse || "").trim();
+    const zipCode = String(receiver.zipCode || "").trim();
+    const street = String(receiver.street || "").trim();
+    const extNumber = String(receiver.extNumber || "").trim();
+    const intNumber = String(receiver.intNumber || "").trim();
+    const colony = String(receiver.colony || "").trim();
+    const municipality = String(receiver.municipality || "").trim();
+    const locality = String(receiver.locality || "").trim();
+    const state = String(receiver.state || "").trim();
+    const country = String(receiver.country || "México").trim() || "México";
+    const concepts = Array.isArray(invoice.concepts)
+      ? invoice.concepts
+          .map((x) => ({
+            description: String(x?.description || "").trim(),
+            total: Number(x?.total || 0),
+            productCode: String(x?.productCode || "").trim(),
+            unitCode: String(x?.unitCode || "").trim(),
+            unitLabel: String(x?.unitLabel || "").trim(),
+            taxRate: Number(x?.taxRate || 0.16),
+          }))
+          .filter((x) => x.description && x.total > 0)
+      : [];
+    const total = concepts.reduce((s, x) => s + (Number(x.total) || 0), 0);
+    const emisorRfc = String(process.env.FACTURAMA_EMISOR_RFC || "").trim().toUpperCase();
+    const emisorName =
+      String(process.env.FACTURAMA_EMISOR_NAME || "").trim() || DEFAULT_EMISOR_NAME_BY_RFC[emisorRfc] || "";
+    const expeditionPlace = String(process.env.FACTURAMA_EXPEDITION_PLACE || "42501").trim();
+
+    if (!/^([A-Z&Ñ]{3,4})\d{6}[A-Z0-9]{3}$/.test(rfc)) {
+      return res.status(422).json({ success: false, message: "RFC inválido." });
+    }
+    if (!legalName || !taxRegime || !cfdiUse || !/^\d{5}$/.test(zipCode) || !concepts.length || !(total > 0)) {
+      return res.status(422).json({
+        success: false,
+        message: "Faltan datos requeridos (nombre, régimen, uso CFDI, CP y conceptos).",
+      });
+    }
+    if (!emisorRfc) {
+      return res.status(422).json({
+        success: false,
+        message: "Falta FACTURAMA_EMISOR_RFC en .env.",
+      });
+    }
+    if (!emisorName) {
+      return res.status(422).json({
+        success: false,
+        message: "Falta FACTURAMA_EMISOR_NAME en .env para ese RFC emisor.",
+      });
+    }
+    if (!/^\d{5}$/.test(expeditionPlace)) {
+      return res.status(422).json({
+        success: false,
+        message: "FACTURAMA_EXPEDITION_PLACE debe ser un código postal de 5 dígitos.",
+      });
+    }
+
+    const payload = buildManualCfdiPayload({
+      rfc,
+      legalName,
+      taxRegime,
+      cfdiUse,
+      zipCode,
+      street,
+      extNumber,
+      intNumber,
+      colony,
+      municipality,
+      locality,
+      state,
+      country,
+      concepts,
+    });
+
+    // Misma lógica operativa que Invoicing: si CSD existe en .env, registrar/validar en Facturama.
+    await ensureFacturamaCsdFromEnv();
+    const raw = await stampFacturamaCfdi(payload);
+    const uuid = String(raw?.Complement?.TaxStamp?.Uuid || "").trim();
+    const facturamaId = String(raw?.Id || "").trim();
+    const folio = String(raw?.Folio || payload.Folio || "");
+    const issuedAt = String(raw?.Date || new Date().toISOString());
+
+    const xmlPath = `/api/facturacion/manual/${encodeURIComponent(uuid || facturamaId)}/download?format=xml`;
+    const pdfPath = `/api/facturacion/manual/${encodeURIComponent(uuid || facturamaId)}/download?format=pdf`;
+
+    const pool = getPool();
+    if (pool) {
+      try {
+        await pool.query(
+          `INSERT INTO invoicing.invoices
+             (folio, series, cfdi_uuid, customer_rfc, issuer_rfc, total, currency, status, pdf_url, xml_url, meta, issued_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'MXN', 'issued_manual', $7, $8, $9::jsonb, $10::timestamptz)`,
+          [
+            folio,
+            String(raw?.Serie || payload.Serie || "INT"),
+            uuid || null,
+            rfc,
+            String(process.env.FACTURAMA_EMISOR_RFC || "").trim().toUpperCase(),
+            total,
+            pdfPath,
+            xmlPath,
+            JSON.stringify({ facturamaId, source: "accounting_manual" }),
+            issuedAt,
+          ]
+        );
+      } catch {
+        /* no bloquear respuesta si falla registro local */
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      data: {
+        uuid: uuid || null,
+        facturamaId,
+        folio,
+        downloads: { xml: xmlPath, pdf: pdfPath },
+      },
+    });
+  } catch (e) {
+    const status =
+      (typeof e?.status === "number" && e.status >= 400 && e.status < 600 ? e.status : null) ||
+      e?.response?.status ||
+      500;
+    const msg =
+      e?.body?.Message ||
+      e?.body?.message ||
+      e?.response?.data?.Message ||
+      e?.response?.data?.message ||
+      e?.message ||
+      "No se pudo timbrar";
+    res.status(status).json({ success: false, message: String(msg), details: e?.body || null });
+  }
+});
+
+app.get("/api/facturacion/manual/:id/download", requireAuth, async (req, res) => {
+  try {
+    if (!facturamaConfigured()) {
+      return res.status(503).json({ success: false, message: "Facturama no configurado." });
+    }
+    const format = String(req.query.format || "xml").toLowerCase();
+    if (!["xml", "pdf"].includes(format)) {
+      return res.status(400).json({ success: false, message: "Formato inválido." });
+    }
+    const key = String(req.params.id || "").trim();
+    const pool = getPool();
+    let facturamaId = key;
+    if (pool) {
+      const { rows } = await pool.query(
+        `SELECT meta
+           FROM invoicing.invoices
+          WHERE upper(coalesce(cfdi_uuid, '')) = upper($1) OR public_id::text = $1
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [key]
+      );
+      const id = rows[0]?.meta?.facturamaId;
+      if (id) facturamaId = String(id);
+    }
+    if (!facturamaId || facturamaId === key) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "No se encontró el identificador de Facturama para esta factura. Revisa que se haya timbrado y guardado correctamente.",
+      });
+    }
+
+    const dl = await downloadFacturamaCfdiById(facturamaId, format);
+    res.setHeader("Content-Type", dl.contentType);
+    res.setHeader("Content-Disposition", `inline; filename="cfdi-manual.${format}"`);
+    res.send(dl.buffer);
+  } catch (e) {
+    const status =
+      (typeof e?.status === "number" && e.status >= 400 && e.status < 600 ? e.status : null) ||
+      e?.response?.status ||
+      500;
+    const msg =
+      e?.body?.Message ||
+      e?.body?.message ||
+      e?.response?.data?.Message ||
+      e?.response?.data?.message ||
+      e?.message ||
+      "No se pudo descargar";
+    res.status(status).json({ success: false, message: String(msg), details: e?.body || null });
   }
 });
 

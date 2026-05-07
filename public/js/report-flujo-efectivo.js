@@ -7,7 +7,7 @@ import {
   setMeta,
   wireToolbar,
 } from "./reports-core.js";
-import { renderFlujoEfectivo } from "./reports-renders.js";
+import { renderFlujoEfectivo, renderOpeningBalances } from "./reports-renders.js";
 
 let chart;
 
@@ -36,6 +36,7 @@ async function load() {
   const d = await loadDashboard();
   if (!d) return;
   setMeta(d);
+  renderOpeningBalances(d);
   renderFlujoEfectivo(d);
   runChartWithStagger("report-chart-flujo", () => renderChart(d));
 }

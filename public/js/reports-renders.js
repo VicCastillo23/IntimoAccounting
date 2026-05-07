@@ -16,7 +16,7 @@ export function renderBalanza(d) {
   if (!tbody) return;
   const rows = d.trialBalance || [];
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="data-table__empty">Sin movimientos en el periodo.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="data-table__empty">Sin cuentas para el periodo.</td></tr>`;
     return;
   }
   tbody.innerHTML = rows
@@ -25,6 +25,8 @@ export function renderBalanza(d) {
     <tr>
       <td>${escapeHtml(r.accountCode)}</td>
       <td>${escapeHtml(r.accountName)}</td>
+      <td class="report-num">${money(r.openingSaldoDeudor)}</td>
+      <td class="report-num">${money(r.openingSaldoAcreedor)}</td>
       <td class="report-num">${money(r.debit)}</td>
       <td class="report-num">${money(r.credit)}</td>
       <td class="report-num">${money(r.saldoDeudor)}</td>
@@ -36,11 +38,63 @@ export function renderBalanza(d) {
     "beforeend",
     `<tr class="report-total-row">
       <td colspan="2"><strong>Total</strong></td>
+      <td class="report-num"><strong>${money(d.totals.openingDeudor)}</strong></td>
+      <td class="report-num"><strong>${money(d.totals.openingAcreedor)}</strong></td>
       <td class="report-num"><strong>${money(d.totals.debit)}</strong></td>
       <td class="report-num"><strong>${money(d.totals.credit)}</strong></td>
-      <td colspan="2" class="report-num report-num--muted">Δ ${money(d.totals.diff)}</td>
+      <td class="report-num"><strong>${money(d.totals.closingDeudor)}</strong></td>
+      <td class="report-num"><strong>${money(d.totals.closingAcreedor)}</strong></td>
     </tr>`
   );
+}
+
+export function renderOpeningBalances(d) {
+  const main = document.querySelector(".main--report");
+  if (!main) return;
+  let host = document.getElementById("report-opening-balances");
+  if (!host) {
+    host = document.createElement("section");
+    host.id = "report-opening-balances";
+    host.className = "report-section panel";
+    host.setAttribute("aria-label", "Saldos iniciales por cuenta");
+    host.innerHTML = `
+      <h2 class="report-section__title">Saldos iniciales por cuenta</h2>
+      <div class="table-wrap table-wrap--sticky-head">
+        <table class="data-table data-table--dense report-table">
+          <thead>
+            <tr>
+              <th>Cuenta</th>
+              <th>Nombre</th>
+              <th class="report-num">Saldo inicial D</th>
+              <th class="report-num">Saldo inicial A</th>
+            </tr>
+          </thead>
+          <tbody id="report-opening-tbody"></tbody>
+        </table>
+      </div>
+    `;
+    const alertSlot = document.getElementById("report-alert");
+    if (alertSlot?.nextSibling) main.insertBefore(host, alertSlot.nextSibling);
+    else main.appendChild(host);
+  }
+  const tbody = document.getElementById("report-opening-tbody");
+  if (!tbody) return;
+  const rows = d.openingBalances || [];
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="data-table__empty">Sin saldos iniciales.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows
+    .map(
+      (r) => `
+    <tr>
+      <td>${escapeHtml(r.accountCode)}</td>
+      <td>${escapeHtml(r.accountName)}</td>
+      <td class="report-num">${money(r.saldoDeudor)}</td>
+      <td class="report-num">${money(r.saldoAcreedor)}</td>
+    </tr>`
+    )
+    .join("");
 }
 
 export function renderActividadBars(d) {

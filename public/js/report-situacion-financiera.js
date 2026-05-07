@@ -7,7 +7,7 @@ import {
   setMeta,
   wireToolbar,
 } from "./reports-core.js";
-import { renderEsf } from "./reports-renders.js";
+import { renderEsf, renderOpeningBalances } from "./reports-renders.js";
 
 let chart;
 
@@ -31,6 +31,7 @@ async function load() {
   const d = await loadDashboard();
   if (!d) return;
   setMeta(d);
+  renderOpeningBalances(d);
   renderEsf(d);
   runChartWithStagger("report-chart-esf", () => renderChart(d));
 }

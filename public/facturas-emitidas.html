@@ -34,32 +34,45 @@
       <p class="sidebar__foot">Datos en reposo cifrados (AES-256-GCM). HTTPS en producción.</p>
     </aside>
 
-    <main class="main main--report">
+    <main class="main main--report main--report-invoices">
       <header class="main__header">
         <h1 class="main__h1">Facturas emitidas</h1>
         <p class="main__lead">Listado interno de CFDI emitidos detectados por el módulo de facturación.</p>
       </header>
 
       <section class="panel report-toolbar">
-        <p class="report-toolbar__hint">Para timbrar CFDI con captura asistida, usa la subpágina de Facturación Manual.</p>
-        <a class="btn btn--primary" href="/facturas-emitidas-facturama.html">
-          <span class="material-symbols-outlined btn__icon" aria-hidden="true">open_in_new</span>
-          Ir a Facturación Manual
-        </a>
+        <div class="report-field">
+          <span>ZIP SAT emitidas</span>
+          <input id="fe-zip" class="report-field__input" type="file" accept=".zip,application/zip" />
+        </div>
+        <button id="fe-import-btn" class="btn btn--ghost" type="button">
+          <span class="material-symbols-outlined btn__icon" aria-hidden="true">upload_file</span>
+          Importar ZIP
+        </button>
+        <p class="report-toolbar__hint">Importa XML de CFDI emitidos; se deduplica por UUID y hash XML.</p>
       </section>
 
       <section class="panel report-section">
         <h2 class="report-section__title">Listado base</h2>
-        <div class="table-wrap table-wrap--sticky-head">
-          <table class="data-table data-table--dense">
+        <div class="report-toolbar" style="padding:0; margin:0 0 0.75rem;">
+          <label class="report-field">Fecha póliza masiva
+            <input id="fe-batch-date" class="report-field__input" type="date" />
+          </label>
+          <button id="fe-batch-btn" class="btn btn--primary" type="button">Crear una póliza con seleccionadas</button>
+          <p class="report-toolbar__hint" id="fe-batch-meta">Selecciona facturas emitidas en la tabla.</p>
+        </div>
+        <div class="table-wrap table-wrap--sticky-head fe-table-wrap">
+          <table id="fe-table" class="data-table data-table--dense">
             <thead>
               <tr>
+                <th><input id="fe-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
                 <th>UUID</th>
                 <th>Serie/Folio</th>
                 <th>Fecha</th>
                 <th>RFC cliente</th>
                 <th class="data-table__num">Total</th>
                 <th>Estatus</th>
+                <th>Póliza</th>
                 <th>XML</th>
                 <th>PDF</th>
               </tr>
@@ -67,6 +80,10 @@
             <tbody id="fe-tbody"></tbody>
           </table>
         </div>
+      </section>
+
+      <section class="panel report-section">
+        <div id="fe-detail" class="report-muted">Selecciona una factura para ver su detalle.</div>
       </section>
     </main>
   </div>

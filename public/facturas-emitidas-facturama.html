@@ -44,10 +44,6 @@
         <p class="report-toolbar__hint" id="facturama-bridge-note">
           Cargando configuración...
         </p>
-        <a class="btn btn--primary" id="facturama-open-link" href="https://facturacion.cafeintimo.mx" target="_blank" rel="noopener">
-          <span class="material-symbols-outlined btn__icon" aria-hidden="true">open_in_new</span>
-          Abrir Facturama
-        </a>
       </section>
 
       <section class="panel report-section">
@@ -85,8 +81,20 @@
           <label class="report-field">Calle
             <input class="report-field__input" id="mi-street" type="text" placeholder="Calle y número" />
           </label>
+          <label class="report-field">Núm. exterior
+            <input class="report-field__input" id="mi-ext-number" type="text" placeholder="123" />
+          </label>
+          <label class="report-field">Núm. interior (opcional)
+            <input class="report-field__input" id="mi-int-number" type="text" placeholder="A" />
+          </label>
           <label class="report-field">Municipio / Alcaldía
             <input class="report-field__input" id="mi-city" type="text" placeholder="Municipio" />
+          </label>
+          <label class="report-field">Colonia
+            <input class="report-field__input" id="mi-colony" type="text" placeholder="Colonia" />
+          </label>
+          <label class="report-field">Localidad o ciudad (opcional)
+            <input class="report-field__input" id="mi-locality" type="text" placeholder="Ciudad" />
           </label>
           <label class="report-field">Estado
             <input class="report-field__input" id="mi-state" type="text" placeholder="Estado" />
@@ -94,15 +102,24 @@
           <label class="report-field">País
             <input class="report-field__input" id="mi-country" type="text" value="México" />
           </label>
+          <div style="grid-column:1 / -1;">
+            <h3 style="margin:.25rem 0 .5rem;">Conceptos</h3>
+            <div id="mi-items"></div>
+            <div style="display:flex; gap:.5rem; align-items:center; margin-top:.5rem;">
+              <button type="button" class="btn btn--ghost btn--sm" id="mi-add-item">Agregar concepto</button>
+              <span class="report-toolbar__hint" id="mi-items-total">Total: $0.00</span>
+            </div>
+          </div>
           <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
             <button type="button" class="btn btn--ghost" id="mi-validate-rfc">Validar RFC</button>
             <button type="submit" class="btn btn--primary">
               <span class="material-symbols-outlined btn__icon" aria-hidden="true">receipt_long</span>
-              Generar factura en Facturama
+              Generar factura manual
             </button>
             <span class="report-toolbar__hint" id="mi-status">Completa los datos y genera la factura.</span>
           </div>
         </form>
+        <div id="mi-result" class="report-muted" style="margin-top:1rem;"></div>
       </section>
     </main>
   </div>

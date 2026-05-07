@@ -34,7 +34,7 @@
       <p class="sidebar__foot">Datos en reposo cifrados (AES-256-GCM). HTTPS en producción.</p>
     </aside>
 
-    <main class="main main--report">
+    <main class="main main--report main--report-invoices">
       <header class="main__header">
         <h1 class="main__h1">Facturas recibidas</h1>
         <p class="main__lead">Carga ZIP del SAT con XML CFDI, valida duplicados y administra el pago con póliza automática o sugerida.</p>
@@ -81,17 +81,30 @@
 
       <section class="panel report-section">
         <h2 class="report-section__title">Listado</h2>
-        <div class="table-wrap table-wrap--sticky-head">
-          <table class="data-table data-table--dense">
+        <div class="report-toolbar" style="padding:0; margin:0 0 0.75rem;">
+          <label class="report-field">Fecha póliza masiva
+            <input id="fr-batch-date" class="report-field__input" type="date" />
+          </label>
+          <button id="fr-batch-pay-btn" class="btn btn--primary" type="button">Crear una póliza con seleccionadas</button>
+          <p class="report-toolbar__hint" id="fr-batch-meta">Selecciona facturas en la tabla.</p>
+        </div>
+        <div class="table-wrap table-wrap--sticky-head fr-table-wrap">
+          <table id="fr-table" class="data-table data-table--dense">
             <thead>
               <tr>
+                <th><input id="fr-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
                 <th>UUID</th>
                 <th>Proveedor</th>
                 <th>Serie/Folio</th>
                 <th>Fecha</th>
+                <th class="data-table__num">Subtotal</th>
+                <th class="data-table__num">IVA</th>
+                <th class="data-table__num">Retenciones</th>
+                <th class="data-table__num">Descuentos</th>
                 <th class="data-table__num">Total</th>
+                <th>Concepto</th>
                 <th>Estatus</th>
-                <th>Archivo</th>
+                <th>Póliza</th>
               </tr>
             </thead>
             <tbody id="fr-tbody"></tbody>

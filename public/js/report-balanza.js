@@ -7,7 +7,7 @@ import {
   setMeta,
   wireToolbar,
 } from "./reports-core.js";
-import { renderBalanza } from "./reports-renders.js";
+import { renderBalanza, renderOpeningBalances } from "./reports-renders.js";
 
 let chart;
 
@@ -42,6 +42,7 @@ async function load() {
   const d = await loadDashboard();
   if (!d) return;
   setMeta(d);
+  renderOpeningBalances(d);
   renderBalanza(d);
   runChartWithStagger("report-chart-balanza", () => renderChart(d));
 }

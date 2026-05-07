@@ -315,6 +315,11 @@ function normalizeNewPolizaSourceRef(raw) {
   const fallback = { kind: "manual", label: null, tabletSync: false };
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fallback;
   const o = /** @type {Record<string, unknown>} */ (raw);
+  // Conserva metadata de otros módulos (facturas emitidas/recibidas, etc.)
+  // para que después pueda rastrearse la póliza desde consultas SQL.
+  if (Object.keys(o).length > 0 && o.kind !== "pos_day") {
+    return o;
+  }
   if (o.kind === "pos_day") {
     const d = String(o.date || "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return fallback;

@@ -2,6 +2,7 @@ import { initMobileNav } from "./mobile-nav.js";
 import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
 import { initPolizaPrintBranding, refreshPolizaPrintHeader } from "./report-print-branding.js";
 import { initSidebarNav } from "./sidebar-nav.js";
+import { applyShellBranding } from "./shell-branding.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -63,7 +64,7 @@ function invoiceFacturaLinksHtml(pdfUrl, xmlUrl) {
   const pdf = String(pdfUrl || "").trim();
   const xml = String(xmlUrl || "").trim();
   const parts = [];
-  if (pdf && /^https?:\/\//i.test(pdf)) {
+  if (pdf && (/^https?:\/\//i.test(pdf) || pdf.startsWith("/"))) {
     const href = escapeAttr(invoiceDownloadViewUrl(pdf));
     parts.push(
       `<a href="${href}" class="poliza-pdf-btn poliza-pdf-btn--readonly" target="_blank" rel="noopener noreferrer" title="Ver factura PDF (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span></a>`
@@ -71,7 +72,7 @@ function invoiceFacturaLinksHtml(pdfUrl, xmlUrl) {
   } else if (pdf) {
     parts.push(escapeHtml(pdf));
   }
-  if (xml && /^https?:\/\//i.test(xml)) {
+  if (xml && (/^https?:\/\//i.test(xml) || xml.startsWith("/"))) {
     const hrefXml = escapeAttr(invoiceDownloadViewUrl(xml));
     parts.push(
       `<a href="${hrefXml}" class="poliza-pdf-btn poliza-pdf-btn--readonly poliza-xml-btn" target="_blank" rel="noopener noreferrer" title="Ver XML timbrado (CFDI)"><span class="material-symbols-outlined" aria-hidden="true">code</span></a>`
@@ -1207,6 +1208,7 @@ async function boot() {
 
   const el = document.getElementById("session-user");
   if (el) el.textContent = j.user.username;
+  applyShellBranding();
   injectFiscalSidebar(fiscalYear, () => void load());
   initSidebarNav();
   await loadAccountPresets();
