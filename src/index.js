@@ -1358,7 +1358,8 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/facturacion/manual/emitir", requireAuth, async (req, res) => {
+/** Facturación manual vía Facturama (alias legacy: /api/facturama/manual/emitir). */
+async function handleManualFacturacionEmitir(req, res) {
   try {
     if (!facturamaConfigured()) {
       return res.status(503).json({
@@ -1503,7 +1504,10 @@ app.post("/api/facturacion/manual/emitir", requireAuth, async (req, res) => {
       "No se pudo timbrar";
     res.status(status).json({ success: false, message: String(msg), details: e?.body || null });
   }
-});
+}
+
+app.post("/api/facturacion/manual/emitir", requireAuth, handleManualFacturacionEmitir);
+app.post("/api/facturama/manual/emitir", requireAuth, handleManualFacturacionEmitir);
 
 app.get("/api/facturacion/manual/:id/download", requireAuth, async (req, res) => {
   try {
