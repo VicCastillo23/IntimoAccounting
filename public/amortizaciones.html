@@ -162,7 +162,7 @@
             <span class="field__label">Factor IPC por ejercicio (opcional; vacío = 1)</span>
             <p class="deprec-ipc-hint">Factores según el ejercicio fiscal activo en el menú. Consulta INEGI aquí y se escriben en los campos IPC de abajo.</p>
             <div id="deprec-inegi-block" class="deprec-inegi-block deprec-inegi-block--form">
-              <p class="deprec-ipc-hint">INPC índice general (INEGI indicador 910420). Factor = INPC fin ÷ inicio (6 decimales).</p>
+              <p class="deprec-ipc-hint">INPC índice general (INEGI indicador 910420). Factor = INPC fin ÷ inicio (6 decimales). El mes fin no puede ser posterior al <strong>mes anterior al actual</strong> (último dato publicado en INEGI).</p>
               <div class="deprec-inegi-row">
                 <label class="field deprec-inegi-field">
                   <span class="field__label">Mes INPC inicio</span>
@@ -183,7 +183,7 @@
                 <button type="button" class="btn btn--sm btn--ghost" id="btn-inegi-apply" disabled>Poner en campo IPC</button>
               </div>
               <div class="deprec-inegi-row deprec-inegi-row--actions">
-                <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-calc-all-years">Calcular IPC en todos los años (ene–dic)</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-calc-all-years">Calcular IPC en todos los años (ene → último mes publicado)</button>
               </div>
             </div>
             <div id="deprec-ipc-inputs" class="deprec-ipc-grid"></div>

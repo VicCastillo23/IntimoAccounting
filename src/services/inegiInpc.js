@@ -273,6 +273,54 @@ export async function getInpcForYearMonth(year, month) {
 }
 
 /**
+ * Último mes con INPC publicado en INEGI: mes calendario anterior a la fecha de referencia.
+ * @param {Date} [refDate]
+ * @returns {{ year: number, month: number }}
+ */
+export function getUltimoMesInpcDisponible(refDate = new Date()) {
+  const d = refDate instanceof Date ? refDate : new Date(refDate);
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  if (m === 0) return { year: y - 1, month: 12 };
+  return { year: y, month: m };
+}
+
+/**
+ * No consulta meses futuros: acota el fin (y el inicio si queda después del fin) al último mes publicable.
+ * @param {number} anioInicio
+ * @param {number} mesInicio
+ * @param {number} anioFin
+ * @param {number} mesFin
+ * @param {Date} [refDate]
+ */
+export function acotarPeriodoInpcPublicado(anioInicio, mesInicio, anioFin, mesFin, refDate = new Date()) {
+  const ultimo = getUltimoMesInpcDisponible(refDate);
+  const ultimoKey = ultimo.year * 100 + ultimo.month;
+  let ay = Math.floor(anioFin);
+  let am = Math.floor(mesFin);
+  let aiy = Math.floor(anioInicio);
+  let aim = Math.floor(mesInicio);
+  let acotado = false;
+
+  const finKey = ay * 100 + am;
+  if (finKey > ultimoKey) {
+    ay = ultimo.year;
+    am = ultimo.month;
+    acotado = true;
+  }
+
+  const inicioKey = aiy * 100 + aim;
+  const nuevoFinKey = ay * 100 + am;
+  if (inicioKey > nuevoFinKey) {
+    aiy = ay;
+    aim = 1;
+    acotado = true;
+  }
+
+  return { anioInicio: aiy, mesInicio: aim, anioFin: ay, mesFin: am, acotado };
+}
+
+/**
  * Factor de actualización = INPC al cierre / INPC al inicio (6 decimales).
  * @param {number} anioInicio
  * @param {number} mesInicio 1-12
@@ -280,8 +328,9 @@ export async function getInpcForYearMonth(year, month) {
  * @param {number} mesFin 1-12
  */
 export async function calcularFactorActualizacion(anioInicio, mesInicio, anioFin, mesFin) {
-  const inpcInicio = await getInpcForYearMonth(anioInicio, mesInicio);
-  const inpcFin = await getInpcForYearMonth(anioFin, mesFin);
+  const ac = acotarPeriodoInpcPublicado(anioInicio, mesInicio, anioFin, mesFin);
+  const inpcInicio = await getInpcForYearMonth(ac.anioInicio, ac.mesInicio);
+  const inpcFin = await getInpcForYearMonth(ac.anioFin, ac.mesFin);
 
   if (!Number.isFinite(inpcInicio) || inpcInicio <= 0) {
     throw new Error("INPC de inicio no válido.");
@@ -297,7 +346,8 @@ export async function calcularFactorActualizacion(anioInicio, mesInicio, anioFin
     inpcInicio,
     inpcFin,
     factor,
-    periodoInicio: `${anioInicio}-${String(mesInicio).padStart(2, "0")}`,
-    periodoFin: `${anioFin}-${String(mesFin).padStart(2, "0")}`,
+    periodoInicio: `${ac.anioInicio}-${String(ac.mesInicio).padStart(2, "0")}`,
+    periodoFin: `${ac.anioFin}-${String(ac.mesFin).padStart(2, "0")}`,
+    acotado: ac.acotado,
   };
 }

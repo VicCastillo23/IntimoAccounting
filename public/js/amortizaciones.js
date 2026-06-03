@@ -10,6 +10,49 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Mes anterior al actual: último INPC que INEGI suele tener publicado. */
+function ultimoMesInpcDisponible(d = new Date()) {
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  if (m === 0) return { year: y - 1, month: 12 };
+  return { year: y, month: m };
+}
+
+function ymStr(y, m) {
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+/** Acota from/to (YYYY-MM) al último mes publicable. */
+function acotarRangoInpc(from, to) {
+  const ult = ultimoMesInpcDisponible();
+  const toMax = ymStr(ult.year, ult.month);
+  let f = from;
+  let t = to;
+  let acotado = false;
+  if (t > toMax) {
+    t = toMax;
+    acotado = true;
+  }
+  if (f > t) {
+    const ty = Number.parseInt(t.slice(0, 4), 10);
+    f = `${ty}-01`;
+    acotado = true;
+  }
+  return { from: f, to: t, acotado, toMax };
+}
+
+/** Rango ene → último mes publicado del ejercicio calendario. */
+function rangoInpcEjercicio(year) {
+  const y = Math.floor(Number(year));
+  const from = `${y}-01`;
+  const ult = ultimoMesInpcDisponible();
+  if (y < ult.year) return { from, to: `${y}-12`, partial: false };
+  if (y > ult.year) return { from, to: null, partial: false };
+  if (ult.month < 1) return { from, to: null, partial: false };
+  const to = ymStr(y, ult.month);
+  return { from, to, partial: ult.month < 12 };
+}
+
 let deprecSearchTimer = 0;
 /** @type {Array<Record<string, unknown>>} */
 let lastDeprecRows = [];
@@ -163,11 +206,18 @@ function populateInegiApplyYearSelect() {
 function ensureInegiMonthDefaults() {
   const from = $("#inegi-from");
   const to = $("#inegi-to");
+  const ult = ultimoMesInpcDisponible();
+  const toDefault = ymStr(ult.year, ult.month);
   if (from && !from.value) {
-    from.value = `${deprecFy - 1}-01`;
+    from.value = `${ult.year}-01`;
   }
   if (to && !to.value) {
-    to.value = `${deprecFy}-01`;
+    to.value = toDefault;
+  }
+  if (from?.value && to?.value) {
+    const c = acotarRangoInpc(from.value, to.value);
+    from.value = c.from;
+    to.value = c.to;
   }
 }
 
@@ -221,8 +271,9 @@ function updateInegiApplyButtonState() {
  * @param {string} to YYYY-MM
  */
 async function fetchInpcFactor(from, to) {
+  const c = acotarRangoInpc(from, to);
   const res = await fetch(
-    `/api/inpc/factor?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    `/api/inpc/factor?from=${encodeURIComponent(c.from)}&to=${encodeURIComponent(c.to)}`,
     { credentials: "include" }
   );
   if (res.status === 401) {
@@ -233,7 +284,7 @@ async function fetchInpcFactor(from, to) {
   if (!res.ok || !j.success) {
     throw new Error(j.message || "No se pudo calcular el factor.");
   }
-  return j.data;
+  return { ...j.data, _range: c };
 }
 
 function setIpcYearValue(year, factor) {
@@ -244,8 +295,14 @@ function setIpcYearValue(year, factor) {
 async function runInegiCalcForYear(year) {
   const y = Math.floor(Number(year));
   if (!Number.isFinite(y)) return;
-  const from = `${y}-01`;
-  const to = `${y}-12`;
+  const rango = rangoInpcEjercicio(y);
+  if (!rango.to) {
+    const u = ultimoMesInpcDisponible();
+    throw new Error(
+      `Aún no hay INPC publicado para ${y}. El último mes disponible en INEGI es ${ymStr(u.year, u.month)}.`
+    );
+  }
+  const { from, to } = rango;
   const resEl = $("#inegi-result");
   if (resEl) {
     resEl.className = "deprec-inegi-result";
@@ -254,9 +311,10 @@ async function runInegiCalcForYear(year) {
   const d = await fetchInpcFactor(from, to);
   const factor = typeof d.factor === "number" ? d.factor : Number(d.factor);
   setIpcYearValue(y, factor);
+  const suffix = rango.partial ? " (hasta último mes publicado)" : "";
   if (resEl) {
     resEl.className = "deprec-inegi-result deprec-inegi-result--ok";
-    resEl.innerHTML = `<strong>IPC ${y}</strong> (${escapeHtml(from)} → ${escapeHtml(to)}): factor <strong>${escapeHtml(String(d.factor))}</strong>`;
+    resEl.innerHTML = `<strong>IPC ${y}</strong> (${escapeHtml(d.periodoInicio || from)} → ${escapeHtml(d.periodoFin || to)}${suffix}): factor <strong>${escapeHtml(String(d.factor))}</strong>`;
   }
 }
 
@@ -268,18 +326,25 @@ async function runInegiCalcAllYears() {
   const lines = [];
   try {
     for (const y of ys) {
+      const rango = rangoInpcEjercicio(y);
+      if (!rango.to) {
+        lines.push(`${y}: sin datos INEGI aún`);
+        continue;
+      }
       if (resEl) {
         resEl.className = "deprec-inegi-result";
-        resEl.textContent = `Consultando INEGI… (${ys.indexOf(y) + 1}/${ys.length}) año ${y}`;
+        resEl.textContent = `Consultando INEGI… (${ys.indexOf(y) + 1}/${ys.length}) ${rango.from} → ${rango.to}`;
       }
-      const d = await fetchInpcFactor(`${y}-01`, `${y}-12`);
+      const d = await fetchInpcFactor(rango.from, rango.to);
       const factor = typeof d.factor === "number" ? d.factor : Number(d.factor);
       setIpcYearValue(y, factor);
-      lines.push(`${y}: ${factor}`);
+      const tag = rango.partial ? ` (${d.periodoFin || rango.to})` : "";
+      lines.push(`${y}: ${factor}${tag}`);
     }
     if (resEl) {
+      const ultimo = ultimoMesInpcDisponible();
       resEl.className = "deprec-inegi-result deprec-inegi-result--ok";
-      resEl.innerHTML = `<strong>IPC por ejercicio (ene–dic)</strong><br>${lines.map((l) => escapeHtml(l)).join("<br>")}`;
+      resEl.innerHTML = `<strong>IPC por ejercicio</strong> (hasta ${escapeHtml(ymStr(ultimo.year, ultimo.month))}, último mes publicado)<br>${lines.map((l) => escapeHtml(l)).join("<br>")}`;
     }
     showAlert("Factores IPC actualizados desde INEGI.", "success");
   } catch (e) {
@@ -314,11 +379,22 @@ async function runInegiCalc() {
   }
   if (wrap) wrap.hidden = true;
   try {
+    const c = acotarRangoInpc(from, to);
+    if (c.acotado) {
+      const fromEl = $("#inegi-from");
+      const toEl = $("#inegi-to");
+      if (fromEl) fromEl.value = c.from;
+      if (toEl) toEl.value = c.to;
+    }
     const d = await fetchInpcFactor(from, to);
     lastInegiFactor = typeof d.factor === "number" ? d.factor : Number(d.factor);
+    const acotadoNote =
+      d.acotado || c.acotado
+        ? ` <span class="deprec-inegi-note">(fin acotado al último mes publicado: ${escapeHtml(c.toMax)})</span>`
+        : "";
     if (resEl) {
       resEl.className = "deprec-inegi-result deprec-inegi-result--ok";
-      resEl.innerHTML = `INPC inicio (${escapeHtml(d.periodoInicio)}): <strong>${fmtInegiNum(d.inpcInicio)}</strong> · INPC fin (${escapeHtml(d.periodoFin)}): <strong>${fmtInegiNum(d.inpcFin)}</strong> · <strong>Factor:</strong> ${escapeHtml(String(d.factor))}`;
+      resEl.innerHTML = `INPC inicio (${escapeHtml(d.periodoInicio)}): <strong>${fmtInegiNum(d.inpcInicio)}</strong> · INPC fin (${escapeHtml(d.periodoFin)}): <strong>${fmtInegiNum(d.inpcFin)}</strong> · <strong>Factor:</strong> ${escapeHtml(String(d.factor))}${acotadoNote}`;
     }
     if (wrap) wrap.hidden = false;
     populateInegiApplyYearSelect();
