@@ -3007,6 +3007,27 @@ select.field__input--select:disabled {
   color: var(--intimo-gray-light);
 }
 
+.report-nif-cf-indent .report-nif-col-concept,
+td.report-nif-cf-indent {
+  padding-left: 1.25rem;
+}
+
+.report-nif-table--cf .report-nif-amt {
+  min-width: 9rem;
+}
+
+.report-nif-table--capital {
+  font-size: 0.8125rem;
+}
+
+.report-nif-col-concept--wide {
+  min-width: 14rem;
+}
+
+.report-nif-table-wrap--scroll {
+  overflow-x: auto;
+}
+
 .report-nif-foot {
   margin: 0.85rem 0 0;
   font-size: 0.75rem;

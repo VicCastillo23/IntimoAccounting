@@ -1,45 +1,20 @@
 import { initAuthShell } from "./auth-shell.js";
-import {
-  applyReportFiscalRange,
-  loadDashboard,
-  reportChartAnimation,
-  runChartWithStagger,
-  setMeta,
-  wireToolbar,
-} from "./reports-core.js";
-import { renderOpeningBalances, renderVariacionCapital } from "./reports-renders.js";
-
-let chart;
-
-function renderChart(d) {
-  if (!window.Chart) return;
-  const ctx = document.getElementById("report-chart-capital")?.getContext("2d");
-  if (!ctx) return;
-  const v = d.variacionCapitalContable;
-  if (chart) chart.destroy();
-  chart = new window.Chart(ctx, {
-    type: "line",
-    data: {
-      labels: ["Inicio", "Resultado", "Cierre"],
-      datasets: [{ label: "Capital", data: [v.capitalAlInicio, v.resultadoDelPeriodo, v.capitalAlCierre], borderColor: "#1f1f1f", backgroundColor: "rgba(31,31,31,0.15)", tension: 0.25, fill: true }],
-    },
-    options: { responsive: true, maintainAspectRatio: false, ...reportChartAnimation() },
-  });
-}
+import { applyReportFiscalRange, getDateRange, loadDashboard, setMeta, wireToolbar } from "./reports-core.js";
+import { renderVariacionCapital } from "./reports-renders.js";
+import { initReportPrintBranding } from "./report-print-branding.js";
 
 async function load() {
   const d = await loadDashboard();
   if (!d) return;
   setMeta(d);
-  renderOpeningBalances(d);
   renderVariacionCapital(d);
-  runChartWithStagger("report-chart-capital", () => renderChart(d));
 }
 
 async function boot() {
   const session = await initAuthShell({ onFiscalChange: () => void load() });
   if (!session) return;
   applyReportFiscalRange(session.fiscalYear);
+  initReportPrintBranding(getDateRange);
   wireToolbar(load);
   await load();
 }

@@ -1,7 +1,12 @@
 import axios from "axios";
 
-/** Serie INPC mensual, base agosto 2018 = 100 (BIE). No está disponible con fuente BISE en el Banco de Indicadores. */
-const INDICADOR_INPC_DEFAULT = "628194";
+/**
+ * INPC índice general base 2018=100 (Constructor BIE de INEGI).
+ * @see https://www.inegi.org.mx/servicios/api_indicadores.html — indicador 910420, quincenal.
+ */
+const INDICADOR_INPC_DEFAULT = "910420";
+/** Serie mensual legada (solo si tu token no expone 910420). */
+const INDICADOR_INPC_LEGACY = "628194";
 const BIE_BASE = "https://www.inegi.org.mx/app/api/indicadores/desarrolladores/jsonxml";
 
 /** Caché en memoria de la serie completa (INEGI devuelve todas las observaciones). */
@@ -40,24 +45,19 @@ function firstSeriesFromBody(body) {
 }
 
 /**
+ * Extrae año y mes de TIME_PERIOD (mensual YYYY-MM o quincenal YYYY/MM/DD).
  * @param {unknown} raw
- * @returns {string}
+ * @returns {{ year: number, month: number, day: number } | null}
  */
-function normalizeInegiPeriod(raw) {
+function parseObservationYearMonth(raw) {
   const s = String(raw ?? "").trim();
-  const m = s.match(/^(\d{4})[/-](\d{1,2})$/);
-  if (!m) return s;
-  const mo = String(Number.parseInt(m[2], 10)).padStart(2, "0");
-  return `${m[1]}-${mo}`;
-}
-
-/**
- * @param {unknown} periodo
- * @param {number} y
- * @param {string} mm
- */
-function periodoCoincide(periodo, y, mm) {
-  return normalizeInegiPeriod(periodo) === `${y}-${mm}`;
+  const m = s.match(/^(\d{4})[/-](\d{1,2})(?:[/-](\d{1,2}))?/);
+  if (!m) return null;
+  const year = Number.parseInt(m[1], 10);
+  const month = Number.parseInt(m[2], 10);
+  const day = m[3] ? Number.parseInt(m[3], 10) : 0;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  return { year, month, day: Number.isFinite(day) ? day : 0 };
 }
 
 /**
@@ -102,28 +102,41 @@ function buildIndicatorUrl(token, indicador, geo, recientes, fuente, version) {
 }
 
 /**
- * Orden de intentos: primero el que definas con INEGI_BIE_GEO_AREA (si existe), luego 0700 (común en INPC/BIE), 00 y 00000.
- * El INPC 628194 requiere fuente BIE; los tokens solo-BISE devuelven ErrorCode 100.
+ * Varias URLs como en el Constructor de Consultas INEGI (BIE / BIE-BISE, geo 00, etc.).
  */
 function buildCandidateUrls(token) {
-  const indicador = getIndicadorInpc();
   const version = String(process.env.INEGI_BIE_API_VERSION || "2.0").trim() || "2.0";
-  const fuente = String(process.env.INEGI_BIE_FUENTE || "BIE").trim() || "BIE";
-  const recientes =
-    String(process.env.INEGI_BIE_RECENTES || "false").toLowerCase() === "true";
+  const recientesEnv = String(process.env.INEGI_BIE_RECENTES || "").trim().toLowerCase();
+  /** false = serie histórica (necesaria para factor inicio/fin). true solo devuelve el último dato. */
+  const recientesPreferido = recientesEnv === "true";
 
   const customGeo = String(process.env.INEGI_BIE_GEO_AREA || "").trim();
-  const geoTries = customGeo
-    ? [customGeo, "0700", "00", "00000"]
-    : ["0700", "00", "00000"];
+  const geoTries = customGeo ? [customGeo, "00", "0700", "00000"] : ["00", "0700", "00000"];
+
+  const fuenteEnv = String(process.env.INEGI_BIE_FUENTE || "").trim();
+  const fuenteTries = fuenteEnv
+    ? [fuenteEnv, "BIE-BISE", "BIE", "BISE"]
+    : ["BIE-BISE", "BIE", "BISE"];
+
+  const indicadorEnv = getIndicadorInpc();
+  const indicadorTries =
+    indicadorEnv === INDICADOR_INPC_DEFAULT
+      ? [INDICADOR_INPC_DEFAULT, INDICADOR_INPC_LEGACY]
+      : [indicadorEnv, INDICADOR_INPC_DEFAULT, INDICADOR_INPC_LEGACY];
 
   const seen = new Set();
   const urls = [];
-  for (const geo of geoTries) {
-    const u = buildIndicatorUrl(token, indicador, geo, recientes, fuente, version);
-    if (!seen.has(u)) {
-      seen.add(u);
-      urls.push({ url: u });
+  for (const indicador of indicadorTries) {
+    for (const fuente of fuenteTries) {
+      for (const geo of geoTries) {
+        for (const recientes of [recientesPreferido, !recientesPreferido]) {
+          const u = buildIndicatorUrl(token, indicador, geo, recientes, fuente, version);
+          if (!seen.has(u)) {
+            seen.add(u);
+            urls.push({ url: u, indicador, fuente, geo });
+          }
+        }
+      }
     }
   }
   return urls;
@@ -194,7 +207,7 @@ async function fetchObservations() {
   }
 
   const bieHint =
-    "El INPC mensual (indicador 628194) se consulta con fuente BIE. Si ves ErrorCode 100 con todos los intentos, el token suele estar limitado a BISE: en el portal de INEGI solicita también acceso al BIE (Banco de Información Económica). Registro: https://www.inegi.org.mx/servicios/api_indicadores.html";
+    "Usa el Constructor BIE de INEGI (indicador 910420, geo 00, fuente BIE-BISE). Si ves ErrorCode 100, revisa el token en el correo de INEGI y define INEGI_BIE_TOKEN en .env. Registro: https://www.inegi.org.mx/servicios/api_indicadores.html";
 
   if (lastHttpStatus === 401 || lastHttpStatus === 403) {
     const err = new Error(
@@ -220,7 +233,7 @@ async function fetchObservations() {
 }
 
 /**
- * INPC para un mes calendario (INEGI usa TIME_PERIOD YYYY/MM o YYYY-MM según serie).
+ * INPC para un mes calendario. Serie quincenal (910420): usa la última quincena del mes.
  * @param {number} year
  * @param {number} month 1-12
  */
@@ -235,22 +248,27 @@ export async function getInpcForYearMonth(year, month) {
   }
 
   const mm = String(m).padStart(2, "0");
-
   const data = await fetchObservations();
 
-  const found = data.find(
-    (item) =>
-      periodoCoincide(item?.TIME_PERIOD, y, mm) &&
-      item?.OBS_VALUE != null &&
-      String(item.OBS_VALUE).trim() !== ""
-  );
-  if (found) {
-    const v = parseFloat(String(found.OBS_VALUE).replace(",", "."));
-    if (Number.isFinite(v) && v > 0) return v;
+  let bestValue = null;
+  let bestDay = -1;
+
+  for (const item of data) {
+    const ym = parseObservationYearMonth(item?.TIME_PERIOD);
+    if (!ym || ym.year !== y || ym.month !== m) continue;
+    if (item?.OBS_VALUE == null || String(item.OBS_VALUE).trim() === "") continue;
+    const v = parseFloat(String(item.OBS_VALUE).replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) continue;
+    if (ym.day >= bestDay) {
+      bestDay = ym.day;
+      bestValue = v;
+    }
   }
 
+  if (bestValue != null) return bestValue;
+
   throw new Error(
-    `No se encontró INPC publicado para ${y}-${mm}. Comprueba que INEGI ya haya publicado ese mes (TIME_PERIOD en la serie) o elige otro rango.`
+    `No se encontró INPC publicado para ${y}-${mm}. Comprueba que INEGI ya haya publicado ese mes (serie quincenal 910420) o elige otro rango.`
   );
 }
 

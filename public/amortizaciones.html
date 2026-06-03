@@ -194,10 +194,10 @@
       </div>
       <div class="modal__body">
         <p id="modal-inpc-desc" class="deprec-ipc-hint modal-inpc__intro">
-          Serie mensual indicador <strong>628194</strong> (INPC, fuente <strong>BIE</strong>). El servidor calcula <strong>INPC fin ÷ INPC inicio</strong> (6 decimales).
-          Token en <code>.env</code>: <code>INEGI_BIE_TOKEN</code>. Ese token debe incluir acceso al <strong>BIE</strong> (no basta con BISE): registro en
-          <a href="https://www.inegi.org.mx/servicios/api_indicadores.html" target="_blank" rel="noopener">API del Banco de Indicadores</a>.
-          Si INEGI devuelve «no se encontraron resultados», revisa permisos del token o variables opcionales <code>INEGI_INPC_INDICADOR</code>, <code>INEGI_BIE_GEO_AREA</code>.
+          INPC índice general base 2018, indicador <strong>910420</strong> (Constructor <strong>BIE</strong>: geo <strong>00</strong>, fuente <strong>BIE-BISE</strong>, datos recientes).
+          El servidor calcula <strong>INPC fin ÷ INPC inicio</strong> (6 decimales; en serie quincenal usa la última quincena de cada mes).
+          Token en <code>.env</code>: <code>INEGI_BIE_TOKEN</code> (lo envía INEGI por correo al generarlo en
+          <a href="https://www.inegi.org.mx/servicios/api_indicadores.html" target="_blank" rel="noopener">API de indicadores</a>).
         </p>
         <div id="deprec-inegi-block" class="deprec-inegi-block">
           <div class="deprec-inegi-row">

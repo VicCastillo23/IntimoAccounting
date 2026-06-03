@@ -58,7 +58,7 @@
       <div id="report-print-header" class="report-print-header-wrap" aria-hidden="true"></div>
       <header class="main__header">
         <h1 class="main__h1">Estado de flujo de efectivo</h1>
-        <p class="main__lead">Aproximación: variación en cuentas de efectivo (SAT órdenes 3–7) e indicador indirecto.</p>
+        <p class="main__lead">Método indirecto: operación, inversión y financiamiento (clasificación SAT / pólizas).</p>
         <p class="nif-print-disclaimer">
           Información preparada con base en las Normas de Información Financiera (NIF) aplicables en México. Cifras en pesos mexicanos (MXN), salvo indicación distinta.
         </p>
@@ -77,13 +77,9 @@
       </div>
       <div id="report-alert" class="report-alert-slot"></div>
 
-      <section class="report-section panel report-hide-print">
-        <h2 class="report-section__title">Indicadores de flujo</h2>
-        <div class="report-chart-wrap"><canvas id="report-chart-flujo"></canvas></div>
-      </section>
-
-      <section class="report-section panel">
-        <div class="report-cf" id="report-cf"></div>
+      <section class="report-section panel" aria-label="Estado de flujos de efectivo">
+        <h2 class="report-section__title">Estado de flujos de efectivo <span class="report-section__nif">(método indirecto)</span></h2>
+        <div id="report-cf-formal"></div>
       </section>
     </main>
   </div>

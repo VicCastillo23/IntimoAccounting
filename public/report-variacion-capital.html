@@ -58,7 +58,7 @@
       <div id="report-print-header" class="report-print-header-wrap" aria-hidden="true"></div>
       <header class="main__header">
         <h1 class="main__h1">Estado de variación en las cuentas de capital contable</h1>
-        <p class="main__lead">Capital social acumulado y resultado del periodo.</p>
+        <p class="main__lead">Movimientos por capital social, utilidades acumuladas y otros resultados integrales (ORI).</p>
         <p class="nif-print-disclaimer">
           Información preparada con base en las Normas de Información Financiera (NIF) aplicables en México. Cifras en pesos mexicanos (MXN), salvo indicación distinta.
         </p>
@@ -77,13 +77,9 @@
       </div>
       <div id="report-alert" class="report-alert-slot"></div>
 
-      <section class="report-section panel report-hide-print">
-        <h2 class="report-section__title">Evolución del capital</h2>
-        <div class="report-chart-wrap"><canvas id="report-chart-capital"></canvas></div>
-      </section>
-
-      <section class="report-section panel">
-        <div class="report-capital" id="report-capital"></div>
+      <section class="report-section panel" aria-label="Estado de variación en el capital contable">
+        <h2 class="report-section__title">Estado de variación en las cuentas de capital contable <span class="report-section__nif">(agrupando ORI)</span></h2>
+        <div id="report-capital-formal"></div>
       </section>
     </main>
   </div>

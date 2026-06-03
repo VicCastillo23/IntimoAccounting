@@ -1,5 +1,6 @@
 import { $, money, escapeHtml } from "./reports-core.js";
 import { renderEsfNif, renderEriNif } from "./reports-nif-render.js";
+import { renderFlujoEfectivoNif, renderVariacionCapitalNif } from "./reports-nif-cf-capital.js";
 
 /** @param {object} d respuesta de `/api/reports/dashboard` */
 export function renderEsf(d) {
@@ -172,36 +173,9 @@ export function renderCambiosSituacion(d) {
 }
 
 export function renderVariacionCapital(d) {
-  const el = $("#report-capital");
-  if (!el) return;
-  const v = d.variacionCapitalContable;
-  el.innerHTML = `
-    <ul class="report-capital-list">
-      <li><span>Capital al inicio del periodo</span><strong>${money(v.capitalAlInicio)}</strong></li>
-      <li><span>Resultado del periodo (estado de resultados)</span><strong>${money(v.resultadoDelPeriodo)}</strong></li>
-      <li><span>Capital al cierre</span><strong>${money(v.capitalAlCierre)}</strong></li>
-      <li class="report-capital-list__note"><span>${escapeHtml(v.nota)}</span></li>
-    </ul>
-  `;
+  renderVariacionCapitalNif(d);
 }
 
 export function renderFlujoEfectivo(d) {
-  const el = $("#report-cf");
-  if (!el) return;
-  const cf = d.estadoFlujoEfectivo;
-  const ind = cf.indirectoSimplificado;
-  const ce = cf.cuentasEfectivoSat;
-  el.innerHTML = `
-    <div class="report-cf-block">
-      <h3 class="report-cf-block__title">Indirecto (referencia)</h3>
-      <p>Utilidad neta: <strong>${money(ind.utilidadNeta)}</strong></p>
-      <p>Variación capital de trabajo (aprox.): <strong>${money(ind.variacionCapitalTrabajoAprox)}</strong></p>
-      <p class="report-muted">${escapeHtml(ind.nota)}</p>
-    </div>
-    <div class="report-cf-block report-cf-block--highlight">
-      <h3 class="report-cf-block__title">Efectivo y equivalentes (SAT 3–7)</h3>
-      <p class="report-cf-big">${money(ce.netoIncrementoEfectivo)}</p>
-      <p class="report-muted">${escapeHtml(ce.criterio)}</p>
-    </div>
-  `;
+  renderFlujoEfectivoNif(d);
 }

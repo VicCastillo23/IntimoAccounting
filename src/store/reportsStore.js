@@ -1,5 +1,9 @@
 import { getPool } from "../db/pool.js";
 import { sumPosPurchasesInRange } from "./posIngestStore.js";
+import {
+  buildEstadoFlujoEfectivoNif,
+  buildVariacionCapitalContableNif,
+} from "./reportsNifStatements.js";
 
 /** @typedef {'ACTIVO'|'PASIVO'|'CAPITAL'|'INGRESOS'|'COSTOS'|'GASTOS'|'OTRO'} SatBucket */
 
@@ -361,43 +365,33 @@ export async function getReportsDashboard(range) {
       },
     };
 
-    const variacionCapitalContable = {
-      capitalAlInicio: balanceOpening.capital,
-      resultadoDelPeriodo: utilidadNeta,
-      capitalAlCierre: balanceClosing.capital,
-      utilidadAcumuladaCierre:
-        balanceClosing.resultadoDelEjercicio - balanceOpening.resultadoDelEjercicio,
-      nota:
-        "Capital contable según código agrupador SAT (grupo Capital). La utilidad acumulada refleja el cambio en resultado entre fechas.",
-    };
+    const estadoFlujoEfectivo = buildEstadoFlujoEfectivoNif({
+      utilidadNeta,
+      movRows,
+      rowsOpening,
+      rowsClosing,
+    });
 
-    /** Efectivo e inversiones inmediatas: SAT órdenes 3–7 (Caja, Bancos…). */
-    const { rows: cashRows } = await client.query(
-      `
-      SELECT
-        COALESCE(SUM(pl.credit) - SUM(pl.debit), 0)::float8 AS neto
-      FROM accounting.poliza_lines pl
-      INNER JOIN accounting.polizas p ON p.id = pl.poliza_id
-      LEFT JOIN accounting.chart_accounts c ON c.num_cta = pl.account_code
-      LEFT JOIN accounting.sat_codigo_agrupador sat ON sat.id = c.sat_codigo_agrupador_id
-      WHERE p.poliza_date >= $1::date AND p.poliza_date <= $2::date
-        AND sat.orden IS NOT NULL AND sat.orden >= 3 AND sat.orden <= 7
-      `,
-      [from, to]
-    );
-    const netoEfectivoPeriodo = Number(cashRows[0]?.neto) || 0;
+    let rowsCompareOpening = null;
+    let rowsCompareClosing = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(compareAsOf)) {
+      const cmpOpenDate = dayBefore(compareFrom || from);
+      rowsCompareOpening = await cumulativeAccountRows(client, cmpOpenDate);
+      rowsCompareClosing = await cumulativeAccountRows(client, compareAsOf);
+    }
 
-    const estadoFlujoEfectivo = {
-      indirectoSimplificado: {
-        utilidadNeta,
-        variacionCapitalTrabajoAprox: cambiosSituacionFinanciera.activo.variacion - cambiosSituacionFinanciera.pasivo.variacion,
-        nota: "Aproximación demo: no sustituye el método directo/indirecto NIF completo.",
-      },
-      cuentasEfectivoSat: {
-        netoIncrementoEfectivo: netoEfectivoPeriodo,
-        criterio: "Movimiento neto (abonos − cargos) en cuentas SAT órdenes 3–7 (Caja y bancos).",
-      },
-    };
+    const variacionCapitalContable = buildVariacionCapitalContableNif({
+      from,
+      to,
+      openingDate,
+      utilidadNeta,
+      rowsOpening,
+      rowsClosing,
+      movRows,
+      rowsCompareOpening,
+      rowsCompareClosing,
+      utilidadCompare: incomeCompare?.utilidadNeta ?? null,
+    });
 
     const { rows: cnt } = await client.query(
       `SELECT COUNT(*)::int AS n FROM accounting.polizas WHERE poliza_date >= $1::date AND poliza_date <= $2::date`,

@@ -13,7 +13,7 @@ export function formatColHeader(iso) {
 }
 
 /** @param {string} iso */
-function formatDateLongEs(iso) {
+export function formatDateLongEs(iso) {
   const t = String(iso || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return "—";
   const d = new Date(`${t}T12:00:00`);
