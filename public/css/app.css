@@ -2580,6 +2580,36 @@ select.field__input--select:disabled {
   line-height: 1.4;
 }
 
+.deprec-inegi-block--form {
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  background: var(--surface-muted, #fafafa);
+}
+
+.deprec-inegi-row--actions {
+  margin-top: 0.35rem;
+}
+
+.deprec-ipc-year-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+
+.deprec-ipc-year-row .field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.deprec-ipc-year-btn {
+  flex-shrink: 0;
+  align-self: stretch;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
 .deprec-ipc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));

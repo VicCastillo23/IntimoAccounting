@@ -184,40 +184,112 @@ function renderDeprecIpcInputs() {
   wrap.innerHTML = ys
     .map(
       (y) => `
-    <label class="field" style="margin:0">
-      <span class="field__label">IPC ${y}</span>
-      <input class="field__input" type="text" inputmode="decimal" id="deprec-ipc-${y}" placeholder="1" autocomplete="off" />
-    </label>`
+    <div class="deprec-ipc-year-cell">
+      <label class="field" style="margin:0">
+        <span class="field__label">IPC ${y}</span>
+        <div class="deprec-ipc-year-row">
+          <input class="field__input" type="text" inputmode="decimal" id="deprec-ipc-${y}" placeholder="1" autocomplete="off" />
+          <button type="button" class="btn btn--ghost btn--sm deprec-ipc-year-btn" data-ipc-year-calc="${y}" title="INEGI enero–diciembre ${y}">INEGI</button>
+        </div>
+      </label>
+    </div>`
     )
     .join("");
 }
 
+function resetInegiResult() {
+  lastInegiFactor = null;
+  const resEl = $("#inegi-result");
+  const wrap = $("#inegi-apply-wrap");
+  if (resEl) {
+    resEl.className = "deprec-inegi-result";
+    resEl.textContent = "";
+  }
+  if (wrap) wrap.hidden = true;
+  updateInegiApplyButtonState();
+}
+
 function updateInegiApplyButtonState() {
   const btn = $("#btn-inegi-apply");
-  const modal = $("#modal-deprec");
   if (!btn) return;
-  const modalOpen = Boolean(modal && !modal.hidden);
   const hasFactor = lastInegiFactor != null && Number.isFinite(lastInegiFactor);
-  btn.disabled = !modalOpen || !hasFactor;
+  btn.disabled = !hasFactor;
 }
 
-function openInpcModal() {
-  const backdrop = $("#modal-inpc");
-  if (!backdrop) return;
-  backdrop.hidden = false;
-  backdrop.setAttribute("aria-hidden", "false");
-  ensureInegiMonthDefaults();
-  populateInegiApplyYearSelect();
-  document.querySelector("#modal-inpc .modal")?.focus();
-  updateInegiApplyButtonState();
+/**
+ * @param {string} from YYYY-MM
+ * @param {string} to YYYY-MM
+ */
+async function fetchInpcFactor(from, to) {
+  const res = await fetch(
+    `/api/inpc/factor?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" }
+  );
+  if (res.status === 401) {
+    window.location.href = "/login.html";
+    throw new Error("Sesión expirada.");
+  }
+  const j = await res.json();
+  if (!res.ok || !j.success) {
+    throw new Error(j.message || "No se pudo calcular el factor.");
+  }
+  return j.data;
 }
 
-function closeInpcModal() {
-  const backdrop = $("#modal-inpc");
-  if (!backdrop) return;
-  backdrop.hidden = true;
-  backdrop.setAttribute("aria-hidden", "true");
-  updateInegiApplyButtonState();
+function setIpcYearValue(year, factor) {
+  const inp = $(`#deprec-ipc-${year}`);
+  if (inp && Number.isFinite(factor)) inp.value = String(factor);
+}
+
+async function runInegiCalcForYear(year) {
+  const y = Math.floor(Number(year));
+  if (!Number.isFinite(y)) return;
+  const from = `${y}-01`;
+  const to = `${y}-12`;
+  const resEl = $("#inegi-result");
+  if (resEl) {
+    resEl.className = "deprec-inegi-result";
+    resEl.textContent = `Consultando INEGI ${from} → ${to}…`;
+  }
+  const d = await fetchInpcFactor(from, to);
+  const factor = typeof d.factor === "number" ? d.factor : Number(d.factor);
+  setIpcYearValue(y, factor);
+  if (resEl) {
+    resEl.className = "deprec-inegi-result deprec-inegi-result--ok";
+    resEl.innerHTML = `<strong>IPC ${y}</strong> (${escapeHtml(from)} → ${escapeHtml(to)}): factor <strong>${escapeHtml(String(d.factor))}</strong>`;
+  }
+}
+
+async function runInegiCalcAllYears() {
+  const ys = deprecYearCols.length ? deprecYearCols : yearColumnsForFy(deprecFy);
+  const resEl = $("#inegi-result");
+  const btn = $("#btn-inegi-calc-all-years");
+  if (btn) btn.disabled = true;
+  const lines = [];
+  try {
+    for (const y of ys) {
+      if (resEl) {
+        resEl.className = "deprec-inegi-result";
+        resEl.textContent = `Consultando INEGI… (${ys.indexOf(y) + 1}/${ys.length}) año ${y}`;
+      }
+      const d = await fetchInpcFactor(`${y}-01`, `${y}-12`);
+      const factor = typeof d.factor === "number" ? d.factor : Number(d.factor);
+      setIpcYearValue(y, factor);
+      lines.push(`${y}: ${factor}`);
+    }
+    if (resEl) {
+      resEl.className = "deprec-inegi-result deprec-inegi-result--ok";
+      resEl.innerHTML = `<strong>IPC por ejercicio (ene–dic)</strong><br>${lines.map((l) => escapeHtml(l)).join("<br>")}`;
+    }
+    showAlert("Factores IPC actualizados desde INEGI.", "success");
+  } catch (e) {
+    if (resEl) {
+      resEl.className = "deprec-inegi-result deprec-inegi-result--err";
+      resEl.textContent = e instanceof Error ? e.message : String(e);
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function runInegiCalc() {
@@ -242,19 +314,7 @@ async function runInegiCalc() {
   }
   if (wrap) wrap.hidden = true;
   try {
-    const res = await fetch(
-      `/api/inpc/factor?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-      { credentials: "include" }
-    );
-    if (res.status === 401) {
-      window.location.href = "/login.html";
-      return;
-    }
-    const j = await res.json();
-    if (!res.ok || !j.success) {
-      throw new Error(j.message || "No se pudo calcular el factor.");
-    }
-    const d = j.data;
+    const d = await fetchInpcFactor(from, to);
     lastInegiFactor = typeof d.factor === "number" ? d.factor : Number(d.factor);
     if (resEl) {
       resEl.className = "deprec-inegi-result deprec-inegi-result--ok";
@@ -277,30 +337,14 @@ function applyInegiFactorToIpcField() {
   if (lastInegiFactor == null || !Number.isFinite(lastInegiFactor)) return;
   const y = $("#inegi-apply-year")?.value;
   if (!y) return;
-  const deprecBackdrop = $("#modal-deprec");
-  const deprecOpen = Boolean(deprecBackdrop && !deprecBackdrop.hidden);
   const inp = $(`#deprec-ipc-${y}`);
-  if (deprecOpen && inp) {
+  if (inp) {
     inp.value = String(lastInegiFactor);
     const errEl = $("#deprec-form-error");
     if (errEl && !errEl.hidden && errEl.textContent) {
       errEl.hidden = true;
       errEl.textContent = "";
     }
-    return;
-  }
-  const msg =
-    "Abre «Editar» o «Nuevo registro» para mostrar el formulario con los campos IPC del año; después vuelve a pulsar «Poner en campo IPC».";
-  if (deprecOpen) {
-    const errEl = $("#deprec-form-error");
-    if (errEl) {
-      errEl.textContent = msg;
-      errEl.hidden = false;
-    } else {
-      window.alert(msg);
-    }
-  } else {
-    window.alert(msg);
   }
 }
 
@@ -365,6 +409,9 @@ function openDeprecModal() {
   backdrop.setAttribute("aria-hidden", "false");
   const title = $("#modal-deprec-title");
   if (title) title.textContent = editingDeprecId ? "Editar registro" : "Nuevo registro";
+  ensureInegiMonthDefaults();
+  populateInegiApplyYearSelect();
+  resetInegiResult();
   document.querySelector("#modal-deprec .modal")?.focus();
   updateInegiApplyButtonState();
 }
@@ -690,16 +737,32 @@ async function boot() {
 
   $("#btn-deprec-modal-save")?.addEventListener("click", () => void saveDeprecModal());
 
-  $("#btn-inpc-open")?.addEventListener("click", () => openInpcModal());
-  $("#btn-inpc-modal-close")?.addEventListener("click", () => closeInpcModal());
+  $("#btn-inpc-open")?.addEventListener("click", async () => {
+    await loadActivosForSelect();
+    clearDeprecForm();
+    openDeprecModal();
+    $("#deprec-inegi-block")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
   $("#btn-inegi-calc")?.addEventListener("click", () => void runInegiCalc());
+  $("#btn-inegi-calc-all-years")?.addEventListener("click", () => void runInegiCalcAllYears());
   $("#btn-inegi-apply")?.addEventListener("click", () => applyInegiFactorToIpcField());
 
-  updateInegiApplyButtonState();
-
-  $("#modal-inpc")?.addEventListener("click", (e) => {
-    if (e.target.id === "modal-inpc") closeInpcModal();
+  $("#deprec-ipc-inputs")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-ipc-year-calc]");
+    if (!btn) return;
+    const y = btn.getAttribute("data-ipc-year-calc");
+    if (!y) return;
+    void runInegiCalcForYear(y).catch((err) => {
+      const resEl = $("#inegi-result");
+      if (resEl) {
+        resEl.className = "deprec-inegi-result deprec-inegi-result--err";
+        resEl.textContent = err instanceof Error ? err.message : String(err);
+      }
+    });
   });
+
+  updateInegiApplyButtonState();
 
   $("#modal-deprec")?.addEventListener("click", (e) => {
     if (e.target.id === "modal-deprec") {
@@ -724,11 +787,6 @@ async function boot() {
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    const inpc = $("#modal-inpc");
-    if (inpc && !inpc.hidden) {
-      closeInpcModal();
-      return;
-    }
     const m = $("#modal-deprec");
     if (m && !m.hidden) {
       closeDeprecModal();

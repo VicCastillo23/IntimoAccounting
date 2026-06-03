@@ -58,7 +58,7 @@
         <p class="main__lead">
           Misma lógica que tu plantilla: <strong>% anual</strong> sobre el monto neto (costo − residual), <strong>depreciación mensual</strong> = anual ÷ 12, y <strong>por año</strong> depreciación anual × factor IPC (índices de precios al consumidor) que captures por ejercicio.
           Puedes <strong>generar filas desde el inventario de activos</strong> y luego afinar % e IPC.
-          El botón <strong>Actualizar INPC</strong> abre el consultor INEGI (factor INPC fin ÷ inicio) para copiarlo al formulario al editar.
+          El factor IPC por año se calcula con <strong>INEGI</strong> dentro del formulario de cada registro (mes inicio / fin o automático ene–dic por ejercicio).
         </p>
       </header>
 
@@ -72,7 +72,7 @@
               <span class="material-symbols-outlined search-field__icon" aria-hidden="true">search</span>
               <input id="deprec-q" class="search-field__input" type="search" placeholder="Buscar nombre, categoría o código…" autocomplete="off" />
             </label>
-            <button type="button" class="btn btn--ghost btn--sm" id="btn-inpc-open" aria-label="Consultar INPC en INEGI y calcular factor">Actualizar INPC</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="btn-inpc-open" aria-label="Nuevo registro para capturar IPC con INEGI">Nuevo registro (IPC)</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-deprec-sync-activos">Desde inventario de activos</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-deprec-add">Nuevo registro</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-deprec-reload">Actualizar lista</button>
@@ -160,7 +160,32 @@
           </label>
           <div class="field field--span deprec-ipc-block">
             <span class="field__label">Factor IPC por ejercicio (opcional; vacío = 1)</span>
-            <p class="deprec-ipc-hint">Se aplican a los años de la tabla según el ejercicio fiscal activo. Usa el botón <strong>Actualizar INPC</strong> en la barra de herramientas encima de la lista para consultar INEGI y calcular el factor.</p>
+            <p class="deprec-ipc-hint">Factores según el ejercicio fiscal activo en el menú. Consulta INEGI aquí y se escriben en los campos IPC de abajo.</p>
+            <div id="deprec-inegi-block" class="deprec-inegi-block deprec-inegi-block--form">
+              <p class="deprec-ipc-hint">INPC índice general (INEGI indicador 910420). Factor = INPC fin ÷ inicio (6 decimales).</p>
+              <div class="deprec-inegi-row">
+                <label class="field deprec-inegi-field">
+                  <span class="field__label">Mes INPC inicio</span>
+                  <input type="month" class="field__input" id="inegi-from" />
+                </label>
+                <label class="field deprec-inegi-field">
+                  <span class="field__label">Mes INPC fin</span>
+                  <input type="month" class="field__input" id="inegi-to" />
+                </label>
+                <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-calc">Calcular factor</button>
+              </div>
+              <div id="inegi-result" class="deprec-inegi-result" aria-live="polite"></div>
+              <div id="inegi-apply-wrap" class="deprec-inegi-row deprec-inegi-row--apply" hidden>
+                <label class="field deprec-inegi-field deprec-inegi-field--grow">
+                  <span class="field__label">Aplicar a IPC del año</span>
+                  <select class="field__input field__input--select" id="inegi-apply-year"></select>
+                </label>
+                <button type="button" class="btn btn--sm btn--ghost" id="btn-inegi-apply" disabled>Poner en campo IPC</button>
+              </div>
+              <div class="deprec-inegi-row deprec-inegi-row--actions">
+                <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-calc-all-years">Calcular IPC en todos los años (ene–dic)</button>
+              </div>
+            </div>
             <div id="deprec-ipc-inputs" class="deprec-ipc-grid"></div>
           </div>
           <label class="field field--span">
@@ -172,57 +197,6 @@
       </div>
       <div class="modal__footer">
         <button type="button" class="btn btn--primary" id="btn-deprec-modal-save">Guardar</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-backdrop modal-backdrop--inpc" id="modal-inpc" hidden aria-hidden="true">
-    <div
-      class="modal modal--account modal--inpc"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-inpc-title"
-      aria-describedby="modal-inpc-desc"
-      tabindex="-1"
-    >
-      <div class="modal__header modal__header--account">
-        <div class="modal__header-text">
-          <h2 class="modal__title" id="modal-inpc-title">INPC (INEGI)</h2>
-          <p class="modal__subtitle" id="modal-inpc-subtitle">Factor INPC fin ÷ inicio</p>
-        </div>
-        <button type="button" class="btn btn--text" id="btn-inpc-modal-close">Cerrar</button>
-      </div>
-      <div class="modal__body">
-        <p id="modal-inpc-desc" class="deprec-ipc-hint modal-inpc__intro">
-          INPC índice general base 2018, indicador <strong>910420</strong> (Constructor <strong>BIE</strong>: geo <strong>00</strong>, fuente <strong>BIE-BISE</strong>, datos recientes).
-          El servidor calcula <strong>INPC fin ÷ INPC inicio</strong> (6 decimales; en serie quincenal usa la última quincena de cada mes).
-          Token en <code>.env</code>: <code>INEGI_BIE_TOKEN</code> (lo envía INEGI por correo al generarlo en
-          <a href="https://www.inegi.org.mx/servicios/api_indicadores.html" target="_blank" rel="noopener">API de indicadores</a>).
-        </p>
-        <div id="deprec-inegi-block" class="deprec-inegi-block">
-          <div class="deprec-inegi-row">
-            <label class="field deprec-inegi-field">
-              <span class="field__label">Mes INPC inicio</span>
-              <input type="month" class="field__input" id="inegi-from" />
-            </label>
-            <label class="field deprec-inegi-field">
-              <span class="field__label">Mes INPC fin</span>
-              <input type="month" class="field__input" id="inegi-to" />
-            </label>
-            <button type="button" class="btn btn--ghost btn--sm" id="btn-inegi-calc">Calcular factor</button>
-          </div>
-          <div id="inegi-result" class="deprec-inegi-result" aria-live="polite"></div>
-          <div id="inegi-apply-wrap" class="deprec-inegi-row deprec-inegi-row--apply" hidden>
-            <label class="field deprec-inegi-field deprec-inegi-field--grow">
-              <span class="field__label">Aplicar a IPC del año</span>
-              <select class="field__input field__input--select" id="inegi-apply-year"></select>
-            </label>
-            <button type="button" class="btn btn--sm btn--ghost" id="btn-inegi-apply" disabled>Poner en campo IPC</button>
-          </div>
-          <p id="inegi-apply-hint" class="deprec-ipc-hint deprec-inegi-apply-hint">
-            Abre <strong>Nuevo registro</strong> o <strong>Editar</strong> una fila para habilitar «Poner en campo IPC» y escribir el factor en el formulario.
-          </p>
-        </div>
       </div>
     </div>
   </div>
