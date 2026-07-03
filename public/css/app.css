@@ -2089,6 +2089,28 @@ tr.catalogo-sat-section td {
   grid-column: 1 / -1;
 }
 
+.field--checkbox {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.field--checkbox input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--intimo-black, #000);
+  cursor: pointer;
+}
+
+.field--checkbox > span {
+  font-size: 0.9375rem;
+  color: var(--intimo-gray-medium);
+}
+
 .field-sat-hint {
   margin: 0 0 0.65rem;
   font-size: 0.8125rem;

@@ -11,6 +11,14 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Quita ceros de más: "50.0000" → "50", "12.5000" → "12.5" */
+function fmtNumber(v) {
+  if (v == null || v === "") return "";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return String(n);
+}
+
 let searchTimer = 0;
 /** @type {string | null} null = alta nueva */
 let editingProductId = null;
@@ -178,8 +186,8 @@ function fillForm(row) {
   editingProductId = String(row.id ?? "");
   $("#carta-form-id").value = editingProductId;
   $("#carta-form-name").value = String(row.name ?? "");
-  $("#carta-form-price").value = String(row.price ?? "");
-  $("#carta-form-tax").value = row.taxRatePercent != null ? String(row.taxRatePercent) : "16";
+  $("#carta-form-price").value = fmtNumber(row.price);
+  $("#carta-form-tax").value = row.taxRatePercent != null ? fmtNumber(row.taxRatePercent) : "16";
   $("#carta-form-desc").value = row.description ? String(row.description) : "";
   $("#carta-form-category").value = String(row.categoryId ?? "");
   $("#carta-form-active").checked = row.isActive !== false;
