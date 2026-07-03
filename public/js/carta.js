@@ -12,6 +12,8 @@ function escapeHtml(s) {
 }
 
 let searchTimer = 0;
+/** @type {string | null} null = alta nueva */
+let editingProductId = null;
 /** @type {Array<Record<string, unknown>>} */
 let lastRows = [];
 /** @type {Array<Record<string, unknown>>} */
@@ -129,8 +131,16 @@ async function loadProducts() {
   }
 }
 
-function openModal() {
+function openModal(isCreate) {
   const backdrop = $("#modal-carta");
+  const title = $("#modal-carta-title");
+  const subtitle = $("#modal-carta-subtitle");
+  if (title) title.textContent = isCreate ? "Nuevo producto" : "Editar producto";
+  if (subtitle) {
+    subtitle.textContent = isCreate
+      ? "Se agregará a la carta; la tablet lo verá al sincronizar"
+      : "Los cambios se reflejan en la tablet al sincronizar";
+  }
   if (!backdrop) return;
   backdrop.hidden = false;
   backdrop.setAttribute("aria-hidden", "false");
@@ -141,6 +151,8 @@ function closeModal() {
   if (!backdrop) return;
   backdrop.hidden = true;
   backdrop.setAttribute("aria-hidden", "true");
+  editingProductId = null;
+  $("#carta-form-id").value = "";
   const err = $("#carta-form-error");
   if (err) {
     err.hidden = true;
@@ -148,45 +160,79 @@ function closeModal() {
   }
 }
 
+function openCreateForm() {
+  editingProductId = null;
+  $("#carta-form-id").value = "";
+  $("#carta-form-name").value = "";
+  $("#carta-form-price").value = "";
+  $("#carta-form-tax").value = "16";
+  $("#carta-form-desc").value = "";
+  const filterCat = $("#carta-category")?.value;
+  $("#carta-form-category").value =
+    filterCat || (leafCategories[0] ? String(leafCategories[0].id) : "");
+  $("#carta-form-active").checked = true;
+  openModal(true);
+}
+
 function fillForm(row) {
-  $("#carta-form-id").value = String(row.id ?? "");
+  editingProductId = String(row.id ?? "");
+  $("#carta-form-id").value = editingProductId;
   $("#carta-form-name").value = String(row.name ?? "");
   $("#carta-form-price").value = String(row.price ?? "");
   $("#carta-form-tax").value = row.taxRatePercent != null ? String(row.taxRatePercent) : "16";
   $("#carta-form-desc").value = row.description ? String(row.description) : "";
   $("#carta-form-category").value = String(row.categoryId ?? "");
   $("#carta-form-active").checked = row.isActive !== false;
+  openModal(false);
 }
 
 async function saveProduct() {
-  const id = $("#carta-form-id")?.value?.trim();
   const name = $("#carta-form-name")?.value?.trim();
   const price = $("#carta-form-price")?.value?.trim();
+  const categoryId = $("#carta-form-category")?.value?.trim();
   const errEl = $("#carta-form-error");
   const btn = $("#btn-carta-modal-save");
-  if (!id || !name || !price) {
+  if (!name || !price) {
     if (errEl) {
       errEl.textContent = "Nombre y precio son obligatorios.";
       errEl.hidden = false;
     }
     return;
   }
+  if (!categoryId) {
+    if (errEl) {
+      errEl.textContent = "Elige una categoría.";
+      errEl.hidden = false;
+    }
+    return;
+  }
+  const payload = {
+    name,
+    price: Number(price),
+    taxRatePercent: $("#carta-form-tax")?.value?.trim() || "16",
+    description: $("#carta-form-desc")?.value?.trim() || null,
+    categoryId,
+    isActive: $("#carta-form-active")?.checked ?? true,
+  };
   if (btn) btn.disabled = true;
   try {
-    await apiFetch(`/api/catalog/products/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        price: Number(price),
-        taxRatePercent: $("#carta-form-tax")?.value?.trim() || "16",
-        description: $("#carta-form-desc")?.value?.trim() || null,
-        categoryId: $("#carta-form-category")?.value,
-        isActive: $("#carta-form-active")?.checked ?? true,
-      }),
-    });
-    closeModal();
-    showAlert("Producto actualizado. La tablet lo verá al sincronizar.", "success");
+    if (editingProductId) {
+      await apiFetch(`/api/catalog/products/${encodeURIComponent(editingProductId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      closeModal();
+      showAlert("Producto actualizado. La tablet lo verá al sincronizar.", "success");
+    } else {
+      await apiFetch("/api/catalog/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      closeModal();
+      showAlert("Producto creado. La tablet lo verá al sincronizar.", "success");
+    }
     await Promise.all([loadProducts(), loadStats()]);
   } catch (e) {
     if (errEl) {
@@ -206,6 +252,7 @@ async function boot() {
   $("#btn-carta-reload")?.addEventListener("click", () => {
     void Promise.all([loadProducts(), loadStats()]);
   });
+  $("#btn-carta-add")?.addEventListener("click", openCreateForm);
   $("#carta-q")?.addEventListener("input", () => {
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => void loadProducts(), 280);
@@ -223,7 +270,6 @@ async function boot() {
     const row = lastRows.find((x) => String(x.id) === idStr);
     if (!row) return;
     fillForm(row);
-    openModal();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && $("#modal-carta") && !$("#modal-carta").hidden) closeModal();
