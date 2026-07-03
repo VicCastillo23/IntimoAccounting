@@ -31,6 +31,16 @@ import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
 import { getLedgerAuxiliarMayor, getReportsDashboard } from "./store/reportsStore.js";
 import { upsertPosPurchaseOrder, buildPosDayPolizaDraft } from "./store/posIngestStore.js";
 import {
+  listCatalogCategories,
+  listCatalogProducts,
+  listCatalogModifiers,
+  getCatalogForSync,
+  getCatalogStats,
+  createCatalogProduct,
+  updateCatalogProduct,
+  updateCatalogCategory,
+} from "./store/posCatalogStore.js";
+import {
   buildActivosTemplateXlsx,
   importActivosFromExcelBuffer,
   listAssetInventory,
@@ -1590,6 +1600,169 @@ app.post("/api/pos/purchase-orders", requirePosIngestAuth, async (req, res) => {
     const code =
       e && typeof e === "object" && "code" in e && e.code === "BAD_REQUEST" ? 400 : 500;
     res.status(code).json({ success: false, message: msg });
+  }
+});
+
+/** Catálogo POS (carta) para sincronización desde IntimoCoffeeApp — misma API key que ingesta de ventas. */
+app.get("/api/pos/catalog", requirePosIngestAuth, async (req, res) => {
+  try {
+    const since = typeof req.query.since === "string" ? req.query.since : null;
+    const includeInactive = req.query.includeInactive === "1" || req.query.includeInactive === "true";
+    const out = await getCatalogForSync({ since, includeInactive });
+    if (!out.ok) {
+      if (out.reason === "no_database") {
+        return res.status(503).json({
+          success: false,
+          message: "Catálogo POS requiere PostgreSQL (DATABASE_URL).",
+          code: out.reason,
+        });
+      }
+      if (out.reason === "missing_table") {
+        return res.status(503).json({
+          success: false,
+          message: out.message || "Falta migración de catálogo POS.",
+          code: out.reason,
+        });
+      }
+      return res.status(500).json({ success: false, message: "Error al leer catálogo." });
+    }
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al leer catálogo POS",
+    });
+  }
+});
+
+function catalogErrorResponse(res, out, fallbackMessage) {
+  if (out.reason === "no_database") {
+    return res.status(503).json({
+      success: false,
+      message: "Catálogo POS requiere PostgreSQL (DATABASE_URL).",
+      code: out.reason,
+    });
+  }
+  if (out.reason === "missing_table") {
+    return res.status(503).json({
+      success: false,
+      message: out.message || "Falta migración de catálogo POS.",
+      code: out.reason,
+    });
+  }
+  if (out.reason === "validation") {
+    return res.status(400).json({ success: false, message: out.message || fallbackMessage });
+  }
+  if (out.reason === "not_found") {
+    return res.status(404).json({ success: false, message: out.message || "No encontrado." });
+  }
+  return res.status(400).json({ success: false, message: out.message || fallbackMessage });
+}
+
+app.get("/api/catalog/stats", requireAuth, async (_req, res) => {
+  try {
+    const out = await getCatalogStats();
+    if (!out.ok) return catalogErrorResponse(res, out, "Error al leer estadísticas.");
+    res.json({ success: true, data: out.stats });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al leer estadísticas del catálogo",
+    });
+  }
+});
+
+app.get("/api/catalog/categories", requireAuth, async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const parentId =
+      req.query.parentId === "null" || req.query.parentId === ""
+        ? req.query.parentId === "null"
+          ? null
+          : undefined
+        : typeof req.query.parentId === "string"
+          ? req.query.parentId
+          : undefined;
+    const activeOnly = req.query.activeOnly !== "0" && req.query.activeOnly !== "false";
+    const out = await listCatalogCategories({ q, parentId, activeOnly });
+    if (!out.ok) return catalogErrorResponse(res, out, "Error al listar categorías.");
+    res.json({ success: true, data: out.rows });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al listar categorías",
+    });
+  }
+});
+
+app.get("/api/catalog/products", requireAuth, async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : "";
+    const activeOnly = req.query.activeOnly !== "0" && req.query.activeOnly !== "false";
+    const limit = Number(req.query.limit);
+    const out = await listCatalogProducts({ q, categoryId, activeOnly, limit });
+    if (!out.ok) return catalogErrorResponse(res, out, "Error al listar productos.");
+    res.json({ success: true, data: out.rows });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al listar productos",
+    });
+  }
+});
+
+app.get("/api/catalog/modifiers", requireAuth, async (req, res) => {
+  try {
+    const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : "";
+    const activeOnly = req.query.activeOnly !== "0" && req.query.activeOnly !== "false";
+    const out = await listCatalogModifiers({ categoryId, activeOnly });
+    if (!out.ok) return catalogErrorResponse(res, out, "Error al listar modificadores.");
+    res.json({ success: true, data: out.rows });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al listar modificadores",
+    });
+  }
+});
+
+app.post("/api/catalog/products", requireAuth, async (req, res) => {
+  try {
+    const out = await createCatalogProduct(req.body || {});
+    if (!out.ok) return catalogErrorResponse(res, out, "No se pudo crear el producto.");
+    res.status(201).json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al crear producto",
+    });
+  }
+});
+
+app.patch("/api/catalog/products/:id", requireAuth, async (req, res) => {
+  try {
+    const out = await updateCatalogProduct(req.params.id, req.body || {});
+    if (!out.ok) return catalogErrorResponse(res, out, "No se pudo actualizar el producto.");
+    res.json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al actualizar producto",
+    });
+  }
+});
+
+app.patch("/api/catalog/categories/:id", requireAuth, async (req, res) => {
+  try {
+    const out = await updateCatalogCategory(req.params.id, req.body || {});
+    if (!out.ok) return catalogErrorResponse(res, out, "No se pudo actualizar la categoría.");
+    res.json({ success: true, data: out.row });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al actualizar categoría",
+    });
   }
 });
 

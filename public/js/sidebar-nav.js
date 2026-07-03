@@ -8,10 +8,10 @@ const NAV_GROUPS = [
       { href: "/auxiliar-mayor.html", icon: "menu_book", label: "Auxiliares de mayor", match: { path: "/auxiliar-mayor.html" } },
       { href: "/libro-diario.html", icon: "import_contacts", label: "Libro diario", match: { path: "/libro-diario.html" } },
       {
-        href: "/placeholder.html?m=control-almacen",
-        icon: "warehouse",
-        label: "Control de almacen",
-        match: { path: "/placeholder.html", m: "control-almacen" },
+        href: "/carta.html",
+        icon: "restaurant_menu",
+        label: "Carta / Productos",
+        match: { path: "/carta.html" },
       },
       { href: "/activos.html", icon: "inventory_2", label: "Control de activos", match: { path: "/activos.html" } },
       {

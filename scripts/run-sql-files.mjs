@@ -38,6 +38,7 @@ const ALL_MIGRATIONS = [
   "deploy/postgres/12_purchase_order_public_token.sql",
   "deploy/postgres/13_auth_app_users.sql",
   "deploy/postgres/14_invoicing_received.sql",
+  "deploy/postgres/15_pos_catalog.sql",
 ];
 
 const argv = process.argv.slice(2);
