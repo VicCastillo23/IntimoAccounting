@@ -8,20 +8,39 @@ let allRows = [];
 /** @type {{ key: string, dir: "asc" | "desc" }} */
 let sortState = { key: "fecha", dir: "desc" };
 
-const FILTER_IDS = {
-  uuid: "#fr-f-uuid",
-  proveedor: "#fr-f-proveedor",
-  serie: "#fr-f-serie",
-  fecha: "#fr-f-fecha",
-  subtotal: "#fr-f-subtotal",
-  iva: "#fr-f-iva",
-  retenciones: "#fr-f-retenciones",
-  descuentos: "#fr-f-descuentos",
-  total: "#fr-f-total",
-  concepto: "#fr-f-concepto",
-  estatus: "#fr-f-estatus",
-  poliza: "#fr-f-poliza",
+/** @type {Record<string, Set<string> | null>} null = sin filtro (todos) */
+const columnFilters = {
+  uuid: null,
+  proveedor: null,
+  serie: null,
+  fecha: null,
+  subtotal: null,
+  iva: null,
+  retenciones: null,
+  descuentos: null,
+  total: null,
+  concepto: null,
+  estatus: null,
+  poliza: null,
 };
+
+const COLUMNS = [
+  "uuid",
+  "proveedor",
+  "serie",
+  "fecha",
+  "subtotal",
+  "iva",
+  "retenciones",
+  "descuentos",
+  "total",
+  "concepto",
+  "estatus",
+  "poliza",
+];
+
+/** @type {{ col: string, draft: Set<string>, values: { key: string, label: string }[], query: string } | null} */
+let openMenu = null;
 
 const fmtMoney = (n) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(
@@ -139,53 +158,71 @@ function issuedDay(r) {
   return String(r.issued_at || "").slice(0, 10);
 }
 
-function normalizeMoneyFilter(raw) {
-  return String(raw || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[$,\s]/g, "");
+function cellKey(r, col) {
+  switch (col) {
+    case "uuid":
+      return String(r.cfdi_uuid || "").trim() || "—";
+    case "proveedor":
+      return String(r.issuer_rfc || "").trim() || "—";
+    case "serie":
+      return serieFolio(r) || "—";
+    case "fecha":
+      return issuedDay(r) || "—";
+    case "subtotal":
+      return String(Number(r.subtotal || 0));
+    case "iva":
+      return String(Number(r.taxes_transferred || 0));
+    case "retenciones":
+      return String(Number(r.taxes_withheld || 0));
+    case "descuentos":
+      return String(Number(r.discounts || 0));
+    case "total":
+      return String(Number(r.total || 0));
+    case "concepto":
+      return String(r.concept || "").trim() || "—";
+    case "estatus":
+      return String(r.status || "").trim().toUpperCase() || "—";
+    case "poliza":
+      return String(r.poliza_folio || "").trim() || "—";
+    default:
+      return "—";
+  }
 }
 
-function moneyMatches(value, filterRaw) {
-  const f = normalizeMoneyFilter(filterRaw);
-  if (!f) return true;
-  const num = String(Number(value || 0));
-  const money = fmtMoney(value).toLowerCase().replace(/[$,\s]/g, "");
-  return num.includes(f) || money.includes(f);
+function cellLabel(r, col) {
+  switch (col) {
+    case "fecha":
+      return fmtDate(r.issued_at);
+    case "subtotal":
+      return fmtMoney(r.subtotal);
+    case "iva":
+      return fmtMoney(r.taxes_transferred);
+    case "retenciones":
+      return fmtMoney(r.taxes_withheld);
+    case "descuentos":
+      return fmtMoney(r.discounts);
+    case "total":
+      return fmtMoney(r.total);
+    default:
+      return cellKey(r, col);
+  }
 }
 
-function readFilters() {
-  return {
-    uuid: String($(FILTER_IDS.uuid)?.value || "").trim().toLowerCase(),
-    proveedor: String($(FILTER_IDS.proveedor)?.value || "").trim().toLowerCase(),
-    serie: String($(FILTER_IDS.serie)?.value || "").trim().toLowerCase(),
-    fecha: String($(FILTER_IDS.fecha)?.value || "").trim(),
-    subtotal: $(FILTER_IDS.subtotal)?.value || "",
-    iva: $(FILTER_IDS.iva)?.value || "",
-    retenciones: $(FILTER_IDS.retenciones)?.value || "",
-    descuentos: $(FILTER_IDS.descuentos)?.value || "",
-    total: $(FILTER_IDS.total)?.value || "",
-    concepto: String($(FILTER_IDS.concepto)?.value || "").trim().toLowerCase(),
-    estatus: String($(FILTER_IDS.estatus)?.value || "").trim().toLowerCase(),
-    poliza: String($(FILTER_IDS.poliza)?.value || "").trim(),
-  };
-}
-
-function rowMatches(r, f) {
-  if (f.uuid && !String(r.cfdi_uuid || "").toLowerCase().includes(f.uuid)) return false;
-  if (f.proveedor && !String(r.issuer_rfc || "").toLowerCase().includes(f.proveedor)) return false;
-  if (f.serie && !serieFolio(r).toLowerCase().includes(f.serie)) return false;
-  if (f.fecha && issuedDay(r) !== f.fecha) return false;
-  if (!moneyMatches(r.subtotal, f.subtotal)) return false;
-  if (!moneyMatches(r.taxes_transferred, f.iva)) return false;
-  if (!moneyMatches(r.taxes_withheld, f.retenciones)) return false;
-  if (!moneyMatches(r.discounts, f.descuentos)) return false;
-  if (!moneyMatches(r.total, f.total)) return false;
-  if (f.concepto && !String(r.concept || "").toLowerCase().includes(f.concepto)) return false;
-  if (f.estatus && String(r.status || "").toLowerCase() !== f.estatus) return false;
-  if (f.poliza === "__none__" && String(r.poliza_folio || "").trim()) return false;
-  if (f.poliza === "__any__" && !String(r.poliza_folio || "").trim()) return false;
-  return true;
+function uniqueValues(col) {
+  const map = new Map();
+  for (const r of allRows) {
+    const key = cellKey(r, col);
+    if (!map.has(key)) map.set(key, cellLabel(r, col));
+  }
+  const moneyCols = new Set(["subtotal", "iva", "retenciones", "descuentos", "total"]);
+  const entries = [...map.entries()].map(([key, label]) => ({ key, label }));
+  entries.sort((a, b) => {
+    if (moneyCols.has(col) || col === "fecha") {
+      return a.key.localeCompare(b.key, "es", { numeric: true });
+    }
+    return a.label.localeCompare(b.label, "es", { numeric: true, sensitivity: "base" });
+  });
+  return entries;
 }
 
 function sortValue(r, key) {
@@ -230,44 +267,44 @@ function compareRows(a, b, key, dir) {
   return String(va).localeCompare(String(vb), "es", { numeric: true, sensitivity: "base" }) * mul;
 }
 
-function filtersActive(f) {
-  return Boolean(
-    f.uuid ||
-      f.proveedor ||
-      f.serie ||
-      f.fecha ||
-      normalizeMoneyFilter(f.subtotal) ||
-      normalizeMoneyFilter(f.iva) ||
-      normalizeMoneyFilter(f.retenciones) ||
-      normalizeMoneyFilter(f.descuentos) ||
-      normalizeMoneyFilter(f.total) ||
-      f.concepto ||
-      f.estatus ||
-      f.poliza
-  );
+function rowMatches(r) {
+  for (const col of COLUMNS) {
+    const selected = columnFilters[col];
+    if (!selected) continue;
+    if (!selected.has(cellKey(r, col))) return false;
+  }
+  return true;
 }
 
-function updateFilterMeta(shown, total, f) {
+function filtersActive() {
+  return COLUMNS.some((c) => columnFilters[c] instanceof Set);
+}
+
+function updateFilterMeta(shown, total) {
   const meta = $("#fr-filter-meta");
   if (!meta) return;
   if (!total) {
     meta.textContent = "Sin facturas recibidas disponibles.";
     return;
   }
-  meta.textContent = filtersActive(f)
+  meta.textContent = filtersActive()
     ? `Filtro activo: ${shown} de ${total} factura(s).`
     : `Mostrando ${shown} de ${total} factura(s).`;
 }
 
-function updateSortIndicators() {
-  document.querySelectorAll("#fr-table .col-sort").forEach((btn) => {
+function updateFilterBtnStates() {
+  document.querySelectorAll("#fr-table .col-filter-btn").forEach((btn) => {
     if (!(btn instanceof HTMLElement)) return;
-    const key = btn.getAttribute("data-sort") || "";
-    const ind = btn.querySelector(".col-sort__ind");
-    const active = key === sortState.key;
-    btn.classList.toggle("col-sort--active", active);
-    btn.setAttribute("aria-sort", active ? (sortState.dir === "asc" ? "ascending" : "descending") : "none");
-    if (ind) ind.textContent = active ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
+    const col = btn.getAttribute("data-col") || "";
+    const active = columnFilters[col] instanceof Set || (sortState.key === col);
+    btn.classList.toggle("col-filter-btn--active", Boolean(columnFilters[col]));
+    btn.classList.toggle("col-filter-btn--sorted", sortState.key === col);
+    btn.title =
+      sortState.key === col
+        ? `Orden: ${sortState.dir === "asc" ? "A→Z" : "Z→A"}${columnFilters[col] ? " · filtro activo" : ""}`
+        : columnFilters[col]
+          ? "Filtro activo"
+          : "Ordenar y filtrar";
   });
 }
 
@@ -334,20 +371,125 @@ function render(rows) {
 }
 
 function applyView() {
-  const f = readFilters();
-  const filtered = allRows.filter((r) => rowMatches(r, f));
+  const filtered = allRows.filter((r) => rowMatches(r));
   filtered.sort((a, b) => compareRows(a, b, sortState.key, sortState.dir));
-  updateFilterMeta(filtered.length, allRows.length, f);
-  updateSortIndicators();
+  updateFilterMeta(filtered.length, allRows.length);
+  updateFilterBtnStates();
   render(filtered);
 }
 
 function clearFilters() {
-  for (const sel of Object.values(FILTER_IDS)) {
-    const el = $(sel);
-    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = "";
-  }
+  for (const col of COLUMNS) columnFilters[col] = null;
   sortState = { key: "fecha", dir: "desc" };
+  closeColMenu();
+  applyView();
+}
+
+function closeColMenu() {
+  openMenu = null;
+  const menu = $("#fr-col-menu");
+  if (menu) {
+    menu.hidden = true;
+    menu.innerHTML = "";
+  }
+}
+
+function draftVisibleValues() {
+  if (!openMenu) return [];
+  const q = openMenu.query.toLowerCase().trim();
+  if (!q) return openMenu.values;
+  return openMenu.values.filter(
+    (v) => v.label.toLowerCase().includes(q) || v.key.toLowerCase().includes(q)
+  );
+}
+
+function renderColMenuBody() {
+  const menu = $("#fr-col-menu");
+  if (!menu || !openMenu) return;
+  const visible = draftVisibleValues();
+  const selectedCount = openMenu.draft.size;
+  const total = openMenu.values.length;
+  menu.innerHTML = `
+    <div class="col-menu__section">
+      <button type="button" class="col-menu__action" data-act="sort-asc">Ordenar de la A a la Z</button>
+      <button type="button" class="col-menu__action" data-act="sort-desc">Ordenar de la Z a la A</button>
+    </div>
+    <div class="col-menu__section">
+      <p class="col-menu__section-title">Filtrar por valores</p>
+      <div class="col-menu__links">
+        <button type="button" class="col-menu__link" data-act="select-all">Seleccionar las ${total} opciones</button>
+        <button type="button" class="col-menu__link" data-act="clear">Borrar</button>
+      </div>
+      <p class="col-menu__count">${selectedCount} seleccionada(s)</p>
+      <label class="col-menu__search">
+        <input type="search" id="fr-col-menu-q" placeholder="Buscar" value="${escapeHtml(openMenu.query)}" autocomplete="off" />
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+      </label>
+      <ul class="col-menu__list" role="listbox" aria-multiselectable="true">
+        ${
+          visible.length
+            ? visible
+                .map(
+                  (v) => `
+          <li>
+            <label class="col-menu__item">
+              <input type="checkbox" data-key="${escapeHtml(v.key)}" ${openMenu.draft.has(v.key) ? "checked" : ""} />
+              <span title="${escapeHtml(v.label)}">${escapeHtml(v.label)}</span>
+            </label>
+          </li>`
+                )
+                .join("")
+            : `<li class="col-menu__empty">Sin coincidencias</li>`
+        }
+      </ul>
+    </div>
+    <div class="col-menu__footer">
+      <button type="button" class="btn btn--ghost col-menu__btn" data-act="cancel">Cancelar</button>
+      <button type="button" class="btn btn--primary col-menu__btn" data-act="accept">Aceptar</button>
+    </div>
+  `;
+}
+
+function positionColMenu(anchor) {
+  const menu = $("#fr-col-menu");
+  if (!menu || !(anchor instanceof HTMLElement)) return;
+  menu.hidden = false;
+  const rect = anchor.getBoundingClientRect();
+  const pad = 8;
+  const mw = Math.min(320, window.innerWidth - pad * 2);
+  menu.style.width = `${mw}px`;
+  let left = rect.left;
+  let top = rect.bottom + 4;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  const m = menu.getBoundingClientRect();
+  if (m.right > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - pad - m.width);
+  if (m.bottom > window.innerHeight - pad) top = Math.max(pad, rect.top - m.height - 4);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function openColMenu(col, anchor) {
+  const values = uniqueValues(col);
+  const current = columnFilters[col];
+  const draft = current ? new Set(current) : new Set(values.map((v) => v.key));
+  openMenu = { col, draft, values, query: "" };
+  renderColMenuBody();
+  positionColMenu(anchor);
+  $("#fr-col-menu-q")?.focus();
+}
+
+function acceptColMenu() {
+  if (!openMenu) return;
+  const { col, draft, values } = openMenu;
+  if (draft.size === 0) {
+    columnFilters[col] = new Set(["__none_match__"]);
+  } else if (draft.size >= values.length) {
+    columnFilters[col] = null;
+  } else {
+    columnFilters[col] = new Set(draft);
+  }
+  closeColMenu();
   applyView();
 }
 
@@ -513,34 +655,112 @@ function wireTableActions() {
   });
 }
 
+function wireColMenu() {
+  $("#fr-table")?.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLElement)) return;
+    const btn = t.closest(".col-filter-btn");
+    if (!(btn instanceof HTMLElement)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const col = btn.getAttribute("data-col");
+    if (!col) return;
+    if (openMenu?.col === col && !$("#fr-col-menu")?.hidden) {
+      closeColMenu();
+      return;
+    }
+    openColMenu(col, btn);
+  });
+
+  $("#fr-col-menu")?.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLElement) || !openMenu) return;
+    const actBtn = t.closest("[data-act]");
+    if (actBtn instanceof HTMLElement) {
+      const act = actBtn.getAttribute("data-act");
+      if (act === "sort-asc") {
+        sortState = { key: openMenu.col, dir: "asc" };
+        applyView();
+        return;
+      }
+      if (act === "sort-desc") {
+        sortState = { key: openMenu.col, dir: "desc" };
+        applyView();
+        return;
+      }
+      if (act === "select-all") {
+        openMenu.draft = new Set(openMenu.values.map((v) => v.key));
+        renderColMenuBody();
+        return;
+      }
+      if (act === "clear") {
+        openMenu.draft = new Set();
+        renderColMenuBody();
+        return;
+      }
+      if (act === "cancel") {
+        closeColMenu();
+        return;
+      }
+      if (act === "accept") {
+        acceptColMenu();
+        return;
+      }
+    }
+  });
+
+  $("#fr-col-menu")?.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLInputElement) || t.type !== "checkbox" || !openMenu) return;
+    const key = t.getAttribute("data-key");
+    if (!key) return;
+    if (t.checked) openMenu.draft.add(key);
+    else openMenu.draft.delete(key);
+    const countEl = $("#fr-col-menu .col-menu__count");
+    if (countEl) countEl.textContent = `${openMenu.draft.size} seleccionada(s)`;
+  });
+
+  $("#fr-col-menu")?.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLInputElement) || t.id !== "fr-col-menu-q" || !openMenu) return;
+    openMenu.query = t.value;
+    renderColMenuBody();
+    const q = $("#fr-col-menu-q");
+    if (q instanceof HTMLInputElement) {
+      q.focus();
+      const len = q.value.length;
+      q.setSelectionRange(len, len);
+    }
+  });
+
+  document.addEventListener("click", (ev) => {
+    const menu = $("#fr-col-menu");
+    if (!menu || menu.hidden) return;
+    const t = ev.target;
+    if (!(t instanceof Node)) return;
+    if (menu.contains(t)) return;
+    if (t instanceof Element && t.closest(".col-filter-btn")) return;
+    closeColMenu();
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") closeColMenu();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!openMenu) return;
+    closeColMenu();
+  });
+}
+
 async function init() {
   const session = await initAuthShell();
   if (!session) return;
   wireTableActions();
+  wireColMenu();
   $("#fr-import-btn")?.addEventListener("click", importZip);
   $("#fr-batch-pay-btn")?.addEventListener("click", () => void paySelectedInvoices());
   $("#fr-clear-filters")?.addEventListener("click", () => clearFilters());
-  const onFilterChange = () => applyView();
-  Object.values(FILTER_IDS).forEach((sel) => {
-    const el = $(sel);
-    el?.addEventListener("input", onFilterChange);
-    el?.addEventListener("change", onFilterChange);
-  });
-  $("#fr-table")?.addEventListener("click", (ev) => {
-    const t = ev.target;
-    if (!(t instanceof HTMLElement)) return;
-    const btn = t.closest(".col-sort");
-    if (!(btn instanceof HTMLElement)) return;
-    const key = btn.getAttribute("data-sort");
-    if (!key) return;
-    if (sortState.key === key) {
-      sortState = { key, dir: sortState.dir === "asc" ? "desc" : "asc" };
-    } else {
-      const numeric = ["fecha", "subtotal", "iva", "retenciones", "descuentos", "total"].includes(key);
-      sortState = { key, dir: numeric ? "desc" : "asc" };
-    }
-    applyView();
-  });
   const batchDate = $("#fr-batch-date");
   if (batchDate && !batchDate.value) batchDate.value = new Date().toISOString().slice(0, 10);
   updateBatchMeta();

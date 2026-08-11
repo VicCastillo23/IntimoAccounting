@@ -3186,18 +3186,21 @@ td.report-nif-cf-indent {
   word-break: normal;
 }
 
+
 .fr-table-wrap {
-  overflow-x: visible;
+  overflow-x: auto;
 }
 
 #fr-table {
-  table-layout: fixed;
-  width: 100%;
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
 }
 
 #fr-table thead th,
 #fr-table tbody td {
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .fr-filter-meta {
@@ -3208,81 +3211,241 @@ td.report-nif-cf-indent {
   flex-wrap: wrap;
 }
 
-#fr-table .col-sort {
+#fr-table thead th.col-head {
+  top: 0;
+  z-index: 5;
+  white-space: nowrap;
+  vertical-align: middle;
+  padding: 0.55rem 0.45rem;
+}
+
+#fr-table .col-head__row {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
-  text-align: inherit;
+  gap: 0.2rem;
+  max-width: 100%;
 }
 
-#fr-table .col-sort:hover,
-#fr-table .col-sort--active {
-  color: var(--intimo-primary, #2e77bb);
-}
-
-#fr-table .col-sort__ind {
-  font-size: 0.7em;
-  opacity: 0.85;
-}
-
-#fr-table .data-table__num .col-sort {
+#fr-table .col-head__row--end {
   justify-content: flex-end;
   width: 100%;
 }
 
-#fr-table thead tr:first-child th {
-  top: 0;
-  z-index: 5;
-}
-
-#fr-table thead tr.data-table__filters th {
-  top: 2.35rem;
-  z-index: 4;
-  padding-top: 0.35rem;
-  padding-bottom: 0.45rem;
-  vertical-align: middle;
-  font-weight: 400;
-  box-shadow: 0 1px 0 var(--intimo-outline);
-}
-
-#fr-table .col-filter {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0.28rem 0.4rem;
-  border: 1px solid var(--intimo-outline, #c8c8c8);
-  border-radius: 4px;
-  background: #fff;
-  color: inherit;
-  font: inherit;
-  font-size: 0.78rem;
+#fr-table .col-head__label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   line-height: 1.2;
 }
 
-#fr-table .col-filter:focus {
-  outline: 2px solid rgba(46, 119, 187, 0.35);
-  outline-offset: 1px;
-  border-color: var(--intimo-primary, #2e77bb);
-}
-
-#fr-table .col-filter--num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-#fr-table select.col-filter {
+#fr-table .col-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #5f6368;
   cursor: pointer;
+  flex: 0 0 auto;
+}
+
+#fr-table .col-filter-btn .material-symbols-outlined {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+#fr-table .col-filter-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #202124;
+}
+
+#fr-table .col-filter-btn--active {
+  color: #1a73e8;
+  background: rgba(26, 115, 232, 0.12);
+}
+
+#fr-table .col-filter-btn--sorted:not(.col-filter-btn--active) {
+  color: #1a73e8;
+}
+
+#fr-table th.col-head--check {
+  width: 2.25rem;
+  text-align: center;
+}
+
+#fr-table tbody td {
+  white-space: nowrap;
+  vertical-align: top;
+  padding: 0.7rem 0.5rem;
+}
+
+#fr-table tbody td:nth-child(2),
+#fr-table tbody td:nth-child(11) {
+  white-space: normal;
+  min-width: 9rem;
+  max-width: 14rem;
+}
+
+/* Menú tipo Sheets */
+.col-menu {
+  position: fixed;
+  z-index: 80;
+  box-sizing: border-box;
+  max-height: min(28rem, calc(100vh - 1rem));
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.15), 0 8px 24px rgba(60, 64, 67, 0.2);
+  overflow: hidden;
+  font-size: 0.875rem;
+  color: #202124;
+}
+
+.col-menu[hidden] {
+  display: none !important;
+}
+
+.col-menu__section {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #e8eaed;
+}
+
+.col-menu__section-title {
+  margin: 0.35rem 0.9rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: none;
+}
+
+.col-menu__action {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.col-menu__action:hover {
+  background: #f1f3f4;
+}
+
+.col-menu__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.15rem 0.9rem 0.35rem;
+}
+
+.col-menu__link {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1a73e8;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.col-menu__link:hover {
+  text-decoration: underline;
+}
+
+.col-menu__count {
+  margin: 0 0.9rem 0.35rem;
+  font-size: 0.75rem;
+  color: #5f6368;
+}
+
+.col-menu__search {
+  position: relative;
+  display: block;
+  margin: 0 0.75rem 0.5rem;
+}
+
+.col-menu__search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 2rem 0.45rem 0.65rem;
+  border: 1px solid #dadce0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.col-menu__search input:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+}
+
+.col-menu__search .material-symbols-outlined {
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  color: #5f6368;
+  pointer-events: none;
+}
+
+.col-menu__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.25rem;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.col-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.col-menu__item:hover {
+  background: #f1f3f4;
+}
+
+.col-menu__item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-menu__empty {
+  padding: 0.75rem 0.9rem;
+  color: #5f6368;
+}
+
+.col-menu__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid #e8eaed;
+  background: #fff;
+}
+
+.col-menu__btn {
+  min-width: 5.5rem;
 }
 
 /* Facturas emitidas: espejo de recibidas (tabla legible y sin scroll horizontal) */

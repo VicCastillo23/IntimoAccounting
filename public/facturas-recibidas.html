@@ -68,55 +68,112 @@
           <button id="fr-clear-filters" class="btn btn--text" type="button">Limpiar filtros</button>
         </div>
         <div class="table-wrap table-wrap--sticky-head fr-table-wrap">
-          <table id="fr-table" class="data-table data-table--dense">
+          <table id="fr-table" class="data-table data-table--dense data-table--col-filters">
             <thead>
               <tr>
-                <th><input id="fr-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
-                <th><button type="button" class="col-sort" data-sort="uuid">UUID<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th><button type="button" class="col-sort" data-sort="proveedor">Proveedor<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th><button type="button" class="col-sort" data-sort="serie">Serie/Folio<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th><button type="button" class="col-sort" data-sort="fecha">Fecha<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th class="data-table__num"><button type="button" class="col-sort" data-sort="subtotal">Subtotal<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th class="data-table__num"><button type="button" class="col-sort" data-sort="iva">IVA<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th class="data-table__num"><button type="button" class="col-sort" data-sort="retenciones">Retenciones<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th class="data-table__num"><button type="button" class="col-sort" data-sort="descuentos">Descuentos<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th class="data-table__num"><button type="button" class="col-sort" data-sort="total">Total<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th><button type="button" class="col-sort" data-sort="concepto">Concepto<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th><button type="button" class="col-sort" data-sort="estatus">Estatus<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-                <th><button type="button" class="col-sort" data-sort="poliza">Póliza<span class="col-sort__ind" aria-hidden="true"></span></button></th>
-              </tr>
-              <tr class="data-table__filters">
-                <th aria-hidden="true"></th>
-                <th><input id="fr-f-uuid" class="col-filter" type="search" placeholder="Buscar…" data-filter="uuid" autocomplete="off" /></th>
-                <th><input id="fr-f-proveedor" class="col-filter" type="search" placeholder="RFC…" data-filter="proveedor" autocomplete="off" /></th>
-                <th><input id="fr-f-serie" class="col-filter" type="search" placeholder="Serie/folio…" data-filter="serie" autocomplete="off" /></th>
-                <th><input id="fr-f-fecha" class="col-filter" type="date" data-filter="fecha" title="Filtrar por fecha exacta" /></th>
-                <th class="data-table__num"><input id="fr-f-subtotal" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="subtotal" inputmode="decimal" autocomplete="off" /></th>
-                <th class="data-table__num"><input id="fr-f-iva" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="iva" inputmode="decimal" autocomplete="off" /></th>
-                <th class="data-table__num"><input id="fr-f-retenciones" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="retenciones" inputmode="decimal" autocomplete="off" /></th>
-                <th class="data-table__num"><input id="fr-f-descuentos" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="descuentos" inputmode="decimal" autocomplete="off" /></th>
-                <th class="data-table__num"><input id="fr-f-total" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="total" inputmode="decimal" autocomplete="off" /></th>
-                <th><input id="fr-f-concepto" class="col-filter" type="search" placeholder="Texto…" data-filter="concepto" autocomplete="off" /></th>
-                <th>
-                  <select id="fr-f-estatus" class="col-filter" data-filter="estatus">
-                    <option value="">Todos</option>
-                    <option value="pending">PENDING</option>
-                    <option value="paid">PAID</option>
-                    <option value="cancelled">CANCELLED</option>
-                  </select>
+                <th class="col-head col-head--check"><input id="fr-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
+                <th class="col-head" data-col="uuid">
+                  <div class="col-head__row">
+                    <span class="col-head__label">UUID</span>
+                    <button type="button" class="col-filter-btn" data-col="uuid" aria-label="Filtrar UUID" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th>
-                  <select id="fr-f-poliza" class="col-filter" data-filter="poliza">
-                    <option value="">Todas</option>
-                    <option value="__none__">Sin póliza</option>
-                    <option value="__any__">Con póliza</option>
-                  </select>
+                <th class="col-head" data-col="proveedor">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Proveedor</span>
+                    <button type="button" class="col-filter-btn" data-col="proveedor" aria-label="Filtrar proveedor" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head" data-col="serie">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Serie/Folio</span>
+                    <button type="button" class="col-filter-btn" data-col="serie" aria-label="Filtrar serie/folio" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head" data-col="fecha">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Fecha</span>
+                    <button type="button" class="col-filter-btn" data-col="fecha" aria-label="Filtrar fecha" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head data-table__num" data-col="subtotal">
+                  <div class="col-head__row col-head__row--end">
+                    <span class="col-head__label">Subtotal</span>
+                    <button type="button" class="col-filter-btn" data-col="subtotal" aria-label="Filtrar subtotal" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head data-table__num" data-col="iva">
+                  <div class="col-head__row col-head__row--end">
+                    <span class="col-head__label">IVA</span>
+                    <button type="button" class="col-filter-btn" data-col="iva" aria-label="Filtrar IVA" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head data-table__num" data-col="retenciones">
+                  <div class="col-head__row col-head__row--end">
+                    <span class="col-head__label">Retenciones</span>
+                    <button type="button" class="col-filter-btn" data-col="retenciones" aria-label="Filtrar retenciones" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head data-table__num" data-col="descuentos">
+                  <div class="col-head__row col-head__row--end">
+                    <span class="col-head__label">Descuentos</span>
+                    <button type="button" class="col-filter-btn" data-col="descuentos" aria-label="Filtrar descuentos" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head data-table__num" data-col="total">
+                  <div class="col-head__row col-head__row--end">
+                    <span class="col-head__label">Total</span>
+                    <button type="button" class="col-filter-btn" data-col="total" aria-label="Filtrar total" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head" data-col="concepto">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Concepto</span>
+                    <button type="button" class="col-filter-btn" data-col="concepto" aria-label="Filtrar concepto" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head" data-col="estatus">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Estatus</span>
+                    <button type="button" class="col-filter-btn" data-col="estatus" aria-label="Filtrar estatus" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
+                </th>
+                <th class="col-head" data-col="poliza">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Póliza</span>
+                    <button type="button" class="col-filter-btn" data-col="poliza" aria-label="Filtrar póliza" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
               </tr>
             </thead>
             <tbody id="fr-tbody"></tbody>
           </table>
         </div>
+        <div id="fr-col-menu" class="col-menu" hidden role="dialog" aria-label="Filtro de columna"></div>
       </section>
 
       <section class="panel report-section">
