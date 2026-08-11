@@ -696,10 +696,7 @@ async function init() {
       alert(e instanceof Error ? e.message : String(e));
     }
   });
-  if (location.hash === "#import") {
-    history.replaceState(null, "", location.pathname + location.search);
-    setTimeout(() => $("#fe-zip")?.click(), 0);
-  }
+  $("#fe-import-btn")?.addEventListener("click", () => $("#fe-zip")?.click());
   const d = $("#fe-batch-date");
   if (d && !d.value) d.value = new Date().toISOString().slice(0, 10);
   updateBatchMeta();
