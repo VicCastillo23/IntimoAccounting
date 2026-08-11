@@ -2,6 +2,27 @@ import { initAuthShell } from "./auth-shell.js";
 
 const $ = (s) => document.querySelector(s);
 const selectedInvoiceIds = new Set();
+
+/** @type {any[]} */
+let allRows = [];
+/** @type {{ key: string, dir: "asc" | "desc" }} */
+let sortState = { key: "fecha", dir: "desc" };
+
+const FILTER_IDS = {
+  uuid: "#fr-f-uuid",
+  proveedor: "#fr-f-proveedor",
+  serie: "#fr-f-serie",
+  fecha: "#fr-f-fecha",
+  subtotal: "#fr-f-subtotal",
+  iva: "#fr-f-iva",
+  retenciones: "#fr-f-retenciones",
+  descuentos: "#fr-f-descuentos",
+  total: "#fr-f-total",
+  concepto: "#fr-f-concepto",
+  estatus: "#fr-f-estatus",
+  poliza: "#fr-f-poliza",
+};
+
 const fmtMoney = (n) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(
     Number(n || 0)
@@ -58,7 +79,10 @@ function highlightXml(xmlPretty) {
       let s = escapeHtml(line);
       s = s.replace(/(&lt;!--.*?--&gt;)/g, '<span class="xml-comment">$1</span>');
       s = s.replace(/(&lt;\??\/?)([\w:.-]+)/g, '$1<span class="xml-tag">$2</span>');
-      s = s.replace(/([\w:.-]+)(=)(&quot;.*?&quot;)/g, '<span class="xml-attr">$1</span><span class="xml-punc">$2</span><span class="xml-value">$3</span>');
+      s = s.replace(
+        /([\w:.-]+)(=)(&quot;.*?&quot;)/g,
+        '<span class="xml-attr">$1</span><span class="xml-punc">$2</span><span class="xml-value">$3</span>'
+      );
       s = s.replace(/(&lt;|&gt;|\/&gt;|\?&gt;)/g, '<span class="xml-punc">$1</span>');
       return s;
     })
@@ -104,20 +128,147 @@ async function api(url, options = {}) {
   return j.data;
 }
 
-function currentFilters() {
-  const p = new URLSearchParams();
-  const query = $("#fr-query")?.value?.trim() || "";
-  const issuerRfc = $("#fr-issuer")?.value?.trim() || "";
-  const status = $("#fr-status")?.value?.trim() || "";
-  const from = $("#fr-from")?.value?.trim() || "";
-  const to = $("#fr-to")?.value?.trim() || "";
-  if (query) p.set("query", query);
-  if (issuerRfc) p.set("issuerRfc", issuerRfc);
-  if (status) p.set("status", status);
-  if (from) p.set("from", from);
-  if (to) p.set("to", to);
-  p.set("limit", "100");
-  return p.toString();
+function serieFolio(r) {
+  const s = String(r.series || "").trim();
+  const f = String(r.folio || "").trim();
+  if (s && f) return `${s}-${f}`;
+  return s || f || "";
+}
+
+function issuedDay(r) {
+  return String(r.issued_at || "").slice(0, 10);
+}
+
+function normalizeMoneyFilter(raw) {
+  return String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[$,\s]/g, "");
+}
+
+function moneyMatches(value, filterRaw) {
+  const f = normalizeMoneyFilter(filterRaw);
+  if (!f) return true;
+  const num = String(Number(value || 0));
+  const money = fmtMoney(value).toLowerCase().replace(/[$,\s]/g, "");
+  return num.includes(f) || money.includes(f);
+}
+
+function readFilters() {
+  return {
+    uuid: String($(FILTER_IDS.uuid)?.value || "").trim().toLowerCase(),
+    proveedor: String($(FILTER_IDS.proveedor)?.value || "").trim().toLowerCase(),
+    serie: String($(FILTER_IDS.serie)?.value || "").trim().toLowerCase(),
+    fecha: String($(FILTER_IDS.fecha)?.value || "").trim(),
+    subtotal: $(FILTER_IDS.subtotal)?.value || "",
+    iva: $(FILTER_IDS.iva)?.value || "",
+    retenciones: $(FILTER_IDS.retenciones)?.value || "",
+    descuentos: $(FILTER_IDS.descuentos)?.value || "",
+    total: $(FILTER_IDS.total)?.value || "",
+    concepto: String($(FILTER_IDS.concepto)?.value || "").trim().toLowerCase(),
+    estatus: String($(FILTER_IDS.estatus)?.value || "").trim().toLowerCase(),
+    poliza: String($(FILTER_IDS.poliza)?.value || "").trim(),
+  };
+}
+
+function rowMatches(r, f) {
+  if (f.uuid && !String(r.cfdi_uuid || "").toLowerCase().includes(f.uuid)) return false;
+  if (f.proveedor && !String(r.issuer_rfc || "").toLowerCase().includes(f.proveedor)) return false;
+  if (f.serie && !serieFolio(r).toLowerCase().includes(f.serie)) return false;
+  if (f.fecha && issuedDay(r) !== f.fecha) return false;
+  if (!moneyMatches(r.subtotal, f.subtotal)) return false;
+  if (!moneyMatches(r.taxes_transferred, f.iva)) return false;
+  if (!moneyMatches(r.taxes_withheld, f.retenciones)) return false;
+  if (!moneyMatches(r.discounts, f.descuentos)) return false;
+  if (!moneyMatches(r.total, f.total)) return false;
+  if (f.concepto && !String(r.concept || "").toLowerCase().includes(f.concepto)) return false;
+  if (f.estatus && String(r.status || "").toLowerCase() !== f.estatus) return false;
+  if (f.poliza === "__none__" && String(r.poliza_folio || "").trim()) return false;
+  if (f.poliza === "__any__" && !String(r.poliza_folio || "").trim()) return false;
+  return true;
+}
+
+function sortValue(r, key) {
+  switch (key) {
+    case "uuid":
+      return String(r.cfdi_uuid || "");
+    case "proveedor":
+      return String(r.issuer_rfc || "");
+    case "serie":
+      return serieFolio(r);
+    case "fecha":
+      return issuedDay(r) || String(r.created_at || "");
+    case "subtotal":
+      return Number(r.subtotal || 0);
+    case "iva":
+      return Number(r.taxes_transferred || 0);
+    case "retenciones":
+      return Number(r.taxes_withheld || 0);
+    case "descuentos":
+      return Number(r.discounts || 0);
+    case "total":
+      return Number(r.total || 0);
+    case "concepto":
+      return String(r.concept || "");
+    case "estatus":
+      return String(r.status || "").toUpperCase();
+    case "poliza":
+      return String(r.poliza_folio || "");
+    default:
+      return "";
+  }
+}
+
+function compareRows(a, b, key, dir) {
+  const mul = dir === "asc" ? 1 : -1;
+  const va = sortValue(a, key);
+  const vb = sortValue(b, key);
+  if (typeof va === "number" && typeof vb === "number") {
+    if (va === vb) return 0;
+    return va < vb ? -mul : mul;
+  }
+  return String(va).localeCompare(String(vb), "es", { numeric: true, sensitivity: "base" }) * mul;
+}
+
+function filtersActive(f) {
+  return Boolean(
+    f.uuid ||
+      f.proveedor ||
+      f.serie ||
+      f.fecha ||
+      normalizeMoneyFilter(f.subtotal) ||
+      normalizeMoneyFilter(f.iva) ||
+      normalizeMoneyFilter(f.retenciones) ||
+      normalizeMoneyFilter(f.descuentos) ||
+      normalizeMoneyFilter(f.total) ||
+      f.concepto ||
+      f.estatus ||
+      f.poliza
+  );
+}
+
+function updateFilterMeta(shown, total, f) {
+  const meta = $("#fr-filter-meta");
+  if (!meta) return;
+  if (!total) {
+    meta.textContent = "Sin facturas recibidas disponibles.";
+    return;
+  }
+  meta.textContent = filtersActive(f)
+    ? `Filtro activo: ${shown} de ${total} factura(s).`
+    : `Mostrando ${shown} de ${total} factura(s).`;
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll("#fr-table .col-sort").forEach((btn) => {
+    if (!(btn instanceof HTMLElement)) return;
+    const key = btn.getAttribute("data-sort") || "";
+    const ind = btn.querySelector(".col-sort__ind");
+    const active = key === sortState.key;
+    btn.classList.toggle("col-sort--active", active);
+    btn.setAttribute("aria-sort", active ? (sortState.dir === "asc" ? "ascending" : "descending") : "none");
+    if (ind) ind.textContent = active ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
+  });
 }
 
 function updateBatchMeta() {
@@ -141,27 +292,23 @@ function syncCheckAllState() {
   all.indeterminate = checked > 0 && checked < checks.length;
 }
 
-async function loadReceivedInvoices() {
+function render(rows) {
   const tbody = $("#fr-tbody");
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="13">Cargando...</td></tr>`;
-  try {
-    const data = await api(`/api/invoices/received?${currentFilters()}`);
-    const rows = Array.isArray(data.rows) ? data.rows : [];
-    if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="13">Sin resultados.</td></tr>`;
-      selectedInvoiceIds.clear();
-      updateBatchMeta();
-      syncCheckAllState();
-      return;
-    }
-    const available = new Set(rows.map((r) => String(r.public_id)));
-    for (const id of [...selectedInvoiceIds]) {
-      if (!available.has(id)) selectedInvoiceIds.delete(id);
-    }
-    tbody.innerHTML = rows
-      .map(
-        (r) => `
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="13">Sin resultados.</td></tr>`;
+    selectedInvoiceIds.clear();
+    updateBatchMeta();
+    syncCheckAllState();
+    return;
+  }
+  const available = new Set(rows.map((r) => String(r.public_id)));
+  for (const id of [...selectedInvoiceIds]) {
+    if (!available.has(id)) selectedInvoiceIds.delete(id);
+  }
+  tbody.innerHTML = rows
+    .map(
+      (r) => `
       <tr data-id="${escapeHtml(r.public_id)}">
         <td>
           <input type="checkbox" data-selectable="${r.status === "pending" ? "1" : "0"}" data-id="${escapeHtml(r.public_id)}" ${selectedInvoiceIds.has(String(r.public_id)) ? "checked" : ""} ${r.status === "pending" ? "" : "disabled"} />
@@ -180,11 +327,40 @@ async function loadReceivedInvoices() {
         <td>${escapeHtml(r.poliza_folio || "—")}</td>
       </tr>
     `
-      )
-      .join("");
-    updateBatchMeta();
-    syncCheckAllState();
+    )
+    .join("");
+  updateBatchMeta();
+  syncCheckAllState();
+}
+
+function applyView() {
+  const f = readFilters();
+  const filtered = allRows.filter((r) => rowMatches(r, f));
+  filtered.sort((a, b) => compareRows(a, b, sortState.key, sortState.dir));
+  updateFilterMeta(filtered.length, allRows.length, f);
+  updateSortIndicators();
+  render(filtered);
+}
+
+function clearFilters() {
+  for (const sel of Object.values(FILTER_IDS)) {
+    const el = $(sel);
+    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = "";
+  }
+  sortState = { key: "fecha", dir: "desc" };
+  applyView();
+}
+
+async function loadReceivedInvoices() {
+  const tbody = $("#fr-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="13">Cargando...</td></tr>`;
+  try {
+    const data = await api(`/api/invoices/received?limit=200`);
+    allRows = Array.isArray(data.rows) ? data.rows : [];
+    applyView();
   } catch (e) {
+    allRows = [];
     tbody.innerHTML = `<tr><td colspan="13">No se pudo cargar (${escapeHtml(e.message)}).</td></tr>`;
   }
 }
@@ -342,14 +518,28 @@ async function init() {
   if (!session) return;
   wireTableActions();
   $("#fr-import-btn")?.addEventListener("click", importZip);
-  $("#fr-filter-btn")?.addEventListener("click", loadReceivedInvoices);
   $("#fr-batch-pay-btn")?.addEventListener("click", () => void paySelectedInvoices());
-  $("#fr-clear-btn")?.addEventListener("click", () => {
-    ["#fr-query", "#fr-issuer", "#fr-status", "#fr-from", "#fr-to"].forEach((sel) => {
-      const el = $(sel);
-      if (el) el.value = "";
-    });
-    loadReceivedInvoices();
+  $("#fr-clear-filters")?.addEventListener("click", () => clearFilters());
+  const onFilterChange = () => applyView();
+  Object.values(FILTER_IDS).forEach((sel) => {
+    const el = $(sel);
+    el?.addEventListener("input", onFilterChange);
+    el?.addEventListener("change", onFilterChange);
+  });
+  $("#fr-table")?.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLElement)) return;
+    const btn = t.closest(".col-sort");
+    if (!(btn instanceof HTMLElement)) return;
+    const key = btn.getAttribute("data-sort");
+    if (!key) return;
+    if (sortState.key === key) {
+      sortState = { key, dir: sortState.dir === "asc" ? "desc" : "asc" };
+    } else {
+      const numeric = ["fecha", "subtotal", "iva", "retenciones", "descuentos", "total"].includes(key);
+      sortState = { key, dir: numeric ? "desc" : "asc" };
+    }
+    applyView();
   });
   const batchDate = $("#fr-batch-date");
   if (batchDate && !batchDate.value) batchDate.value = new Date().toISOString().slice(0, 10);

@@ -54,31 +54,6 @@
 
       <div id="fr-alert" class="alert" hidden></div>
 
-      <section class="panel report-toolbar">
-        <label class="report-field">Buscar
-          <input id="fr-query" class="report-field__input" type="search" placeholder="UUID o serie/folio" />
-        </label>
-        <label class="report-field">RFC proveedor
-          <input id="fr-issuer" class="report-field__input" type="text" placeholder="XAXX..." />
-        </label>
-        <label class="report-field">Estatus
-          <select id="fr-status" class="report-field__input">
-            <option value="">Todos</option>
-            <option value="pending">Pendiente</option>
-            <option value="paid">Pagada</option>
-            <option value="cancelled">Cancelada</option>
-          </select>
-        </label>
-        <label class="report-field">Desde
-          <input id="fr-from" class="report-field__input" type="date" />
-        </label>
-        <label class="report-field">Hasta
-          <input id="fr-to" class="report-field__input" type="date" />
-        </label>
-        <button id="fr-filter-btn" class="btn btn--ghost" type="button">Aplicar filtros</button>
-        <button id="fr-clear-btn" class="btn btn--text" type="button">Limpiar</button>
-      </section>
-
       <section class="panel report-section">
         <h2 class="report-section__title">Listado</h2>
         <div class="report-toolbar" style="padding:0; margin:0 0 0.75rem;">
@@ -88,23 +63,55 @@
           <button id="fr-batch-pay-btn" class="btn btn--primary" type="button">Crear una póliza con seleccionadas</button>
           <p class="report-toolbar__hint" id="fr-batch-meta">Selecciona facturas en la tabla.</p>
         </div>
+        <div class="report-toolbar fr-filter-meta" style="padding:0; margin:0 0 0.5rem;">
+          <p class="report-toolbar__hint" id="fr-filter-meta">Mostrando todas las facturas.</p>
+          <button id="fr-clear-filters" class="btn btn--text" type="button">Limpiar filtros</button>
+        </div>
         <div class="table-wrap table-wrap--sticky-head fr-table-wrap">
           <table id="fr-table" class="data-table data-table--dense">
             <thead>
               <tr>
                 <th><input id="fr-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
-                <th>UUID</th>
-                <th>Proveedor</th>
-                <th>Serie/Folio</th>
-                <th>Fecha</th>
-                <th class="data-table__num">Subtotal</th>
-                <th class="data-table__num">IVA</th>
-                <th class="data-table__num">Retenciones</th>
-                <th class="data-table__num">Descuentos</th>
-                <th class="data-table__num">Total</th>
-                <th>Concepto</th>
-                <th>Estatus</th>
-                <th>Póliza</th>
+                <th><button type="button" class="col-sort" data-sort="uuid">UUID<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th><button type="button" class="col-sort" data-sort="proveedor">Proveedor<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th><button type="button" class="col-sort" data-sort="serie">Serie/Folio<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th><button type="button" class="col-sort" data-sort="fecha">Fecha<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th class="data-table__num"><button type="button" class="col-sort" data-sort="subtotal">Subtotal<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th class="data-table__num"><button type="button" class="col-sort" data-sort="iva">IVA<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th class="data-table__num"><button type="button" class="col-sort" data-sort="retenciones">Retenciones<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th class="data-table__num"><button type="button" class="col-sort" data-sort="descuentos">Descuentos<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th class="data-table__num"><button type="button" class="col-sort" data-sort="total">Total<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th><button type="button" class="col-sort" data-sort="concepto">Concepto<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th><button type="button" class="col-sort" data-sort="estatus">Estatus<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+                <th><button type="button" class="col-sort" data-sort="poliza">Póliza<span class="col-sort__ind" aria-hidden="true"></span></button></th>
+              </tr>
+              <tr class="data-table__filters">
+                <th aria-hidden="true"></th>
+                <th><input id="fr-f-uuid" class="col-filter" type="search" placeholder="Buscar…" data-filter="uuid" autocomplete="off" /></th>
+                <th><input id="fr-f-proveedor" class="col-filter" type="search" placeholder="RFC…" data-filter="proveedor" autocomplete="off" /></th>
+                <th><input id="fr-f-serie" class="col-filter" type="search" placeholder="Serie/folio…" data-filter="serie" autocomplete="off" /></th>
+                <th><input id="fr-f-fecha" class="col-filter" type="date" data-filter="fecha" title="Filtrar por fecha exacta" /></th>
+                <th class="data-table__num"><input id="fr-f-subtotal" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="subtotal" inputmode="decimal" autocomplete="off" /></th>
+                <th class="data-table__num"><input id="fr-f-iva" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="iva" inputmode="decimal" autocomplete="off" /></th>
+                <th class="data-table__num"><input id="fr-f-retenciones" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="retenciones" inputmode="decimal" autocomplete="off" /></th>
+                <th class="data-table__num"><input id="fr-f-descuentos" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="descuentos" inputmode="decimal" autocomplete="off" /></th>
+                <th class="data-table__num"><input id="fr-f-total" class="col-filter col-filter--num" type="search" placeholder="Monto" data-filter="total" inputmode="decimal" autocomplete="off" /></th>
+                <th><input id="fr-f-concepto" class="col-filter" type="search" placeholder="Texto…" data-filter="concepto" autocomplete="off" /></th>
+                <th>
+                  <select id="fr-f-estatus" class="col-filter" data-filter="estatus">
+                    <option value="">Todos</option>
+                    <option value="pending">PENDING</option>
+                    <option value="paid">PAID</option>
+                    <option value="cancelled">CANCELLED</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="fr-f-poliza" class="col-filter" data-filter="poliza">
+                    <option value="">Todas</option>
+                    <option value="__none__">Sin póliza</option>
+                    <option value="__any__">Con póliza</option>
+                  </select>
+                </th>
               </tr>
             </thead>
             <tbody id="fr-tbody"></tbody>
