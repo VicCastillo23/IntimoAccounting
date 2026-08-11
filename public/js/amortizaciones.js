@@ -659,11 +659,23 @@ async function saveDeprecModal() {
 
 async function syncFromActivos() {
   const btn = $("#btn-deprec-sync-activos");
+  const raw = window.prompt(
+    "Porcentaje anual de depreciación para los nuevos renglones (ej. 10):",
+    "10"
+  );
+  if (raw == null) return;
+  const annualPct = Number(String(raw).trim().replace(",", "."));
+  if (!Number.isFinite(annualPct) || annualPct <= 0) {
+    showAlert("Indica un porcentaje anual válido mayor a 0.");
+    return;
+  }
   if (btn) btn.disabled = true;
   try {
     const res = await fetch("/api/depreciaciones/sync-from-activos", {
       method: "POST",
       credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ annualPct }),
     });
     if (res.status === 401) {
       window.location.href = "/login.html";
@@ -674,10 +686,11 @@ async function syncFromActivos() {
       throw new Error(j.message || "No se pudo sincronizar.");
     }
     const n = j.data?.inserted ?? 0;
+    const pct = j.data?.annualPct ?? annualPct;
     showAlert(
       n === 0
         ? "No hay activos nuevos con costo mayor a 0 sin renglón de depreciación (o ya estaban todos enlazados)."
-        : `Se agregaron ${n} renglón(es) desde el inventario (10% anual por defecto; edítalos si hace falta).`,
+        : `Se agregaron ${n} renglón(es) desde el inventario (${pct}% anual; edítalos si hace falta).`,
       n === 0 ? "error" : "success"
     );
     await loadList();

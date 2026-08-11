@@ -248,7 +248,12 @@ async function doImport() {
     return;
   }
   const n = j.data?.inserted ?? 0;
-  showAlert(`Importación correcta: ${n} renglón(es) guardados. Lote: ${j.data?.importBatchId || "—"}.`, "success");
+  const u = j.data?.updated ?? 0;
+  const parts = [];
+  if (n) parts.push(`${n} nuevo(s)`);
+  if (u) parts.push(`${u} actualizado(s) por código`);
+  const summary = parts.length ? parts.join(", ") : "0 renglones";
+  showAlert(`Importación correcta: ${summary}. Lote: ${j.data?.importBatchId || "—"}.`, "success");
   input.value = "";
   $("#activos-file-name").textContent = "";
   $("#btn-activos-import").disabled = true;

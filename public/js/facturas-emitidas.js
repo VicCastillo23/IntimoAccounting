@@ -3,8 +3,173 @@ import { initAuthShell } from "./auth-shell.js";
 const $ = (s) => document.querySelector(s);
 const selectedIssuedIds = new Set();
 
+/** @type {any[]} */
+let allRows = [];
+/** @type {{ key: string, dir: "asc" | "desc" }} */
+let sortState = { key: "fecha", dir: "desc" };
+
+const FILTER_IDS = {
+  uuid: "#fe-f-uuid",
+  serie: "#fe-f-serie",
+  fecha: "#fe-f-fecha",
+  rfc: "#fe-f-rfc",
+  total: "#fe-f-total",
+  estatus: "#fe-f-estatus",
+  poliza: "#fe-f-poliza",
+};
+
 function money(v) {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(Number(v || 0));
+}
+
+function serieFolio(r) {
+  const s = String(r.series || "").trim();
+  const f = String(r.folio || "").trim();
+  if (s && f) return `${s}-${f}`;
+  return s || f || "";
+}
+
+function issuedDay(r) {
+  return String(r.issued_at || "").slice(0, 10);
+}
+
+function readFilters() {
+  return {
+    uuid: String($(FILTER_IDS.uuid)?.value || "").trim().toLowerCase(),
+    serie: String($(FILTER_IDS.serie)?.value || "").trim().toLowerCase(),
+    fecha: String($(FILTER_IDS.fecha)?.value || "").trim(),
+    rfc: String($(FILTER_IDS.rfc)?.value || "").trim().toLowerCase(),
+    total: String($(FILTER_IDS.total)?.value || "").trim().toLowerCase().replace(/[$,\s]/g, ""),
+    estatus: String($(FILTER_IDS.estatus)?.value || "").trim().toUpperCase(),
+    poliza: String($(FILTER_IDS.poliza)?.value || "").trim(),
+  };
+}
+
+function rowMatches(r, f) {
+  if (f.uuid && !String(r.cfdi_uuid || "").toLowerCase().includes(f.uuid)) return false;
+  if (f.serie && !serieFolio(r).toLowerCase().includes(f.serie)) return false;
+  if (f.fecha && issuedDay(r) !== f.fecha) return false;
+  if (f.rfc && !String(r.customer_rfc || "").toLowerCase().includes(f.rfc)) return false;
+  if (f.total) {
+    const totalStr = String(Number(r.total || 0));
+    const moneyStr = money(r.total).toLowerCase().replace(/[$,\s]/g, "");
+    if (!totalStr.includes(f.total) && !moneyStr.includes(f.total)) return false;
+  }
+  if (f.estatus && String(r.status || "").toUpperCase() !== f.estatus) return false;
+  if (f.poliza === "__none__" && String(r.poliza_folio || "").trim()) return false;
+  if (f.poliza === "__any__" && !String(r.poliza_folio || "").trim()) return false;
+  if (f.poliza && f.poliza !== "__none__" && f.poliza !== "__any__") {
+    if (!String(r.poliza_folio || "").toLowerCase().includes(f.poliza.toLowerCase())) return false;
+  }
+  return true;
+}
+
+function compareRows(a, b, key, dir) {
+  const mul = dir === "asc" ? 1 : -1;
+  const va = (() => {
+    switch (key) {
+      case "uuid":
+        return String(a.cfdi_uuid || "");
+      case "serie":
+        return serieFolio(a);
+      case "fecha":
+        return issuedDay(a) || String(a.created_at || "");
+      case "rfc":
+        return String(a.customer_rfc || "");
+      case "total":
+        return Number(a.total || 0);
+      case "estatus":
+        return String(a.status || "").toUpperCase();
+      case "poliza":
+        return String(a.poliza_folio || "");
+      default:
+        return "";
+    }
+  })();
+  const vb = (() => {
+    switch (key) {
+      case "uuid":
+        return String(b.cfdi_uuid || "");
+      case "serie":
+        return serieFolio(b);
+      case "fecha":
+        return issuedDay(b) || String(b.created_at || "");
+      case "rfc":
+        return String(b.customer_rfc || "");
+      case "total":
+        return Number(b.total || 0);
+      case "estatus":
+        return String(b.status || "").toUpperCase();
+      case "poliza":
+        return String(b.poliza_folio || "");
+      default:
+        return "";
+    }
+  })();
+  if (typeof va === "number" && typeof vb === "number") {
+    if (va === vb) return 0;
+    return va < vb ? -mul : mul;
+  }
+  return String(va).localeCompare(String(vb), "es", { numeric: true, sensitivity: "base" }) * mul;
+}
+
+function applyView() {
+  const f = readFilters();
+  const filtered = allRows.filter((r) => rowMatches(r, f));
+  filtered.sort((a, b) => compareRows(a, b, sortState.key, sortState.dir));
+  updateFilterMeta(filtered.length, allRows.length, f);
+  updateSortIndicators();
+  render(filtered);
+}
+
+function filtersActive(f) {
+  return Boolean(f.uuid || f.serie || f.fecha || f.rfc || f.total || f.estatus || f.poliza);
+}
+
+function updateFilterMeta(shown, total, f) {
+  const meta = $("#fe-filter-meta");
+  if (!meta) return;
+  if (!total) {
+    meta.textContent = "Sin facturas emitidas disponibles.";
+    return;
+  }
+  if (!filtersActive(f)) {
+    meta.textContent = `Mostrando ${shown} de ${total} factura(s).`;
+    return;
+  }
+  meta.textContent = `Filtro activo: ${shown} de ${total} factura(s).`;
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll("#fe-table .col-sort").forEach((btn) => {
+    if (!(btn instanceof HTMLElement)) return;
+    const key = btn.getAttribute("data-sort") || "";
+    const ind = btn.querySelector(".col-sort__ind");
+    const active = key === sortState.key;
+    btn.classList.toggle("col-sort--active", active);
+    btn.setAttribute("aria-sort", active ? (sortState.dir === "asc" ? "ascending" : "descending") : "none");
+    if (ind) ind.textContent = active ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
+  });
+}
+
+function populateEstatusOptions(rows) {
+  const sel = $(FILTER_IDS.estatus);
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const prev = sel.value;
+  const statuses = [...new Set(rows.map((r) => String(r.status || "").trim().toUpperCase()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "es")
+  );
+  sel.innerHTML = `<option value="">Todos</option>${statuses.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}`;
+  if (prev && statuses.includes(prev)) sel.value = prev;
+}
+
+function clearFilters() {
+  for (const sel of Object.values(FILTER_IDS)) {
+    const el = $(sel);
+    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = "";
+  }
+  sortState = { key: "fecha", dir: "desc" };
+  applyView();
 }
 
 function esc(s) {
@@ -236,8 +401,10 @@ async function createSinglePoliza(id) {
   });
   alert(`Póliza creada: ${out?.poliza?.folio || out?.poliza?.id || "OK"} · Facturas: ${Number(out?.linkedCount) || 0}`);
   selectedIssuedIds.delete(id);
-  const data = await api("/api/invoices/issued?limit=100");
-  render(Array.isArray(data.rows) ? data.rows : []);
+  const data = await api("/api/invoices/issued?limit=200");
+  allRows = Array.isArray(data.rows) ? data.rows : [];
+  populateEstatusOptions(allRows);
+  applyView();
   await showDetail(id);
 }
 
@@ -273,12 +440,36 @@ async function init() {
   if (tbody) tbody.innerHTML = `<tr><td colspan="10">Cargando...</td></tr>`;
   const load = async () => {
     try {
-      const data = await api("/api/invoices/issued?limit=100");
-      render(Array.isArray(data.rows) ? data.rows : []);
+      const data = await api("/api/invoices/issued?limit=200");
+      allRows = Array.isArray(data.rows) ? data.rows : [];
+      populateEstatusOptions(allRows);
+      applyView();
     } catch (e) {
+      allRows = [];
       if (tbody) tbody.innerHTML = `<tr><td colspan="10">No se pudo cargar: ${esc(e.message)}</td></tr>`;
     }
   };
+  const onFilterChange = () => applyView();
+  Object.values(FILTER_IDS).forEach((sel) => {
+    const el = $(sel);
+    el?.addEventListener("input", onFilterChange);
+    el?.addEventListener("change", onFilterChange);
+  });
+  $("#fe-clear-filters")?.addEventListener("click", () => clearFilters());
+  $("#fe-table")?.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLElement)) return;
+    const btn = t.closest(".col-sort");
+    if (!(btn instanceof HTMLElement)) return;
+    const key = btn.getAttribute("data-sort");
+    if (!key) return;
+    if (sortState.key === key) {
+      sortState = { key, dir: sortState.dir === "asc" ? "desc" : "asc" };
+    } else {
+      sortState = { key, dir: key === "fecha" || key === "total" ? "desc" : "asc" };
+    }
+    applyView();
+  });
   $("#fe-tbody")?.addEventListener("change", (ev) => {
     const t = ev.target;
     if (!(t instanceof HTMLInputElement) || t.type !== "checkbox" || !t.dataset.id) return;

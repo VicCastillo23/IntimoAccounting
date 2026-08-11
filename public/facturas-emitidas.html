@@ -61,20 +61,84 @@
           <button id="fe-batch-btn" class="btn btn--primary" type="button">Crear una póliza con seleccionadas</button>
           <p class="report-toolbar__hint" id="fe-batch-meta">Selecciona facturas emitidas en la tabla.</p>
         </div>
+        <div class="report-toolbar fe-filter-meta" style="padding:0; margin:0 0 0.5rem;">
+          <p class="report-toolbar__hint" id="fe-filter-meta">Mostrando todas las facturas.</p>
+          <button id="fe-clear-filters" class="btn btn--text" type="button">Limpiar filtros</button>
+        </div>
         <div class="table-wrap table-wrap--sticky-head fe-table-wrap">
           <table id="fe-table" class="data-table data-table--dense">
             <thead>
               <tr>
                 <th><input id="fe-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
-                <th>UUID</th>
-                <th>Serie/Folio</th>
-                <th>Fecha</th>
-                <th>RFC cliente</th>
-                <th class="data-table__num">Total</th>
-                <th>Estatus</th>
-                <th>Póliza</th>
+                <th>
+                  <button type="button" class="col-sort" data-sort="uuid" aria-label="Ordenar por UUID">
+                    UUID<span class="col-sort__ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="col-sort" data-sort="serie" aria-label="Ordenar por serie/folio">
+                    Serie/Folio<span class="col-sort__ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="col-sort" data-sort="fecha" aria-label="Ordenar por fecha">
+                    Fecha<span class="col-sort__ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="col-sort" data-sort="rfc" aria-label="Ordenar por RFC cliente">
+                    RFC cliente<span class="col-sort__ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th class="data-table__num">
+                  <button type="button" class="col-sort" data-sort="total" aria-label="Ordenar por total">
+                    Total<span class="col-sort__ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="col-sort" data-sort="estatus" aria-label="Ordenar por estatus">
+                    Estatus<span class="col-sort__ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="col-sort" data-sort="poliza" aria-label="Ordenar por póliza">
+                    Póliza<span class="col-sort__ind" aria-hidden="true"></span>
+                  </button>
+                </th>
                 <th>XML</th>
                 <th>PDF</th>
+              </tr>
+              <tr class="data-table__filters">
+                <th aria-hidden="true"></th>
+                <th>
+                  <input id="fe-f-uuid" class="col-filter" type="search" placeholder="Buscar…" data-filter="uuid" autocomplete="off" />
+                </th>
+                <th>
+                  <input id="fe-f-serie" class="col-filter" type="search" placeholder="Serie/folio…" data-filter="serie" autocomplete="off" />
+                </th>
+                <th>
+                  <input id="fe-f-fecha" class="col-filter" type="date" data-filter="fecha" title="Filtrar por fecha exacta" />
+                </th>
+                <th>
+                  <input id="fe-f-rfc" class="col-filter" type="search" placeholder="RFC…" data-filter="rfc" autocomplete="off" />
+                </th>
+                <th class="data-table__num">
+                  <input id="fe-f-total" class="col-filter col-filter--num" type="search" placeholder="Ej. 480" data-filter="total" inputmode="decimal" autocomplete="off" />
+                </th>
+                <th>
+                  <select id="fe-f-estatus" class="col-filter" data-filter="estatus">
+                    <option value="">Todos</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="fe-f-poliza" class="col-filter" data-filter="poliza">
+                    <option value="">Todas</option>
+                    <option value="__none__">Sin póliza</option>
+                    <option value="__any__">Con póliza</option>
+                  </select>
+                </th>
+                <th aria-hidden="true"></th>
+                <th aria-hidden="true"></th>
               </tr>
             </thead>
             <tbody id="fe-tbody"></tbody>

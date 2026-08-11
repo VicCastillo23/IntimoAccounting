@@ -442,10 +442,23 @@ export async function updateDepreciationSchedule(id, body) {
 
 /**
  * Crea un renglón de depreciación por cada activo del inventario que aún no tenga vínculo.
+ * @param {{ annualPct?: number | string | null }} [opts]
  */
-export async function syncDepreciationFromActivos() {
+export async function syncDepreciationFromActivos(opts = {}) {
   const pool = getPool();
   if (!pool) return { ok: false, reason: "no_database", inserted: 0 };
+
+  const pctRaw = opts.annualPct ?? opts.annual_depreciation_pct;
+  const annualPct = pctRaw === "" || pctRaw == null ? null : Number(pctRaw);
+  if (annualPct == null || !Number.isFinite(annualPct) || annualPct <= 0) {
+    return {
+      ok: false,
+      reason: "pct_required",
+      inserted: 0,
+      message:
+        "Indica el porcentaje anual de depreciación (annualPct) para sincronizar desde activos.",
+    };
+  }
 
   const sql = `
     INSERT INTO accounting.asset_depreciation_schedule (
@@ -465,7 +478,7 @@ export async function syncDepreciationFromActivos() {
       NULL,
       0::numeric,
       '',
-      10::numeric,
+      $1::numeric,
       '{}'::jsonb
     FROM accounting.asset_inventory ai
     WHERE NOT EXISTS (
@@ -476,8 +489,8 @@ export async function syncDepreciationFromActivos() {
   `;
 
   try {
-    const r = await pool.query(sql);
-    return { ok: true, inserted: r.rowCount ?? 0 };
+    const r = await pool.query(sql, [annualPct]);
+    return { ok: true, inserted: r.rowCount ?? 0, annualPct };
   } catch (e) {
     const out = mapScheduleDbError(e);
     if (out.ok === false) return { ...out, inserted: 0 };

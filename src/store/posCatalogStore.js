@@ -209,11 +209,13 @@ export async function getCatalogForSync(opts = {}) {
 
   const sinceRaw = String(opts.since || "").trim();
   const since = sinceRaw && !Number.isNaN(Date.parse(sinceRaw)) ? new Date(sinceRaw).toISOString() : null;
-  const includeInactive = opts.includeInactive === true;
+  // En delta (since), siempre incluir inactivos para que la tablet oculte/desactive productos.
+  // En sync full, por defecto solo activos salvo includeInactive explícito.
+  const includeInactive = opts.includeInactive === true || Boolean(since);
 
   const activeClause = includeInactive ? "" : " AND is_active = TRUE";
   const params = since ? [since] : [];
-  const sinceClause = since ? ` AND updated_at > $1::timestamptz` : "";
+  const sinceClause = since ? ` AND updated_at >= $1::timestamptz` : "";
 
   try {
     const [cats, prods, mods, maxRow] = await Promise.all([

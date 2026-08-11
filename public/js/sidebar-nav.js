@@ -76,7 +76,7 @@ const NAV_GROUPS = [
   {
     id: "sistema",
     label: "Sistema",
-    items: [{ href: "/health", icon: "monitor_heart", label: "Estado del servicio", external: true, match: null }],
+    items: [{ href: "/status.html", icon: "monitor_heart", label: "Estado del servicio", match: { path: "/status.html" } }],
   },
 ];
 

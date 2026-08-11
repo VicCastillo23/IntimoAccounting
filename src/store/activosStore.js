@@ -81,12 +81,26 @@ function parseDateCell(v) {
   }
   const s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // es-MX: prefer DD/MM/YYYY. If day>12 treat as DD/MM; if ambiguous prefer DD/MM.
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) {
-    const mm = m[1].padStart(2, "0");
-    const dd = m[2].padStart(2, "0");
+    const a = Number(m[1]);
+    const b = Number(m[2]);
     const yy = m[3];
-    return `${yy}-${mm}-${dd}`;
+    let day;
+    let month;
+    if (a > 12) {
+      day = a;
+      month = b;
+    } else if (b > 12) {
+      month = a;
+      day = b;
+    } else {
+      day = a;
+      month = b;
+    }
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return `${yy}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
   return null;
 }
@@ -240,7 +254,62 @@ export async function importActivosFromExcelBuffer(buffer, filename) {
   try {
     await client.query("BEGIN");
     let inserted = 0;
+    let updated = 0;
     for (const r of records) {
+      const sku = String(r.sku ?? "").trim();
+      const name = r.name || "—";
+      // Upsert by sku when present; otherwise always insert.
+      if (sku) {
+        const existing = await client.query(
+          `
+          SELECT id FROM accounting.asset_inventory
+          WHERE sku <> '' AND lower(sku) = lower($1)
+          ORDER BY id DESC
+          LIMIT 1
+          `,
+          [sku]
+        );
+        if (existing.rows.length) {
+          await client.query(
+            `
+            UPDATE accounting.asset_inventory SET
+              import_batch_id = $1::uuid,
+              import_filename = $2,
+              row_num = $3,
+              category = $4,
+              name = $5,
+              sku = $6,
+              quantity = $7,
+              unit = $8,
+              location = $9,
+              state_condition = $10,
+              acquisition_date = $11::date,
+              cost_estimate = $12,
+              notes = $13,
+              updated_at = now()
+            WHERE id = $14
+            `,
+            [
+              batchId,
+              fname,
+              r.rowNum,
+              r.category,
+              name,
+              sku,
+              r.quantity,
+              r.unit,
+              r.location,
+              r.stateCondition,
+              r.acquisitionDate,
+              r.costEstimate,
+              r.notes,
+              existing.rows[0].id,
+            ]
+          );
+          updated += 1;
+          continue;
+        }
+      }
       await client.query(
         `
         INSERT INTO accounting.asset_inventory (
@@ -254,8 +323,8 @@ export async function importActivosFromExcelBuffer(buffer, filename) {
           fname,
           r.rowNum,
           r.category,
-          r.name || "—",
-          r.sku,
+          name,
+          sku,
           r.quantity,
           r.unit,
           r.location,
@@ -273,6 +342,7 @@ export async function importActivosFromExcelBuffer(buffer, filename) {
       importBatchId: batchId,
       importFilename: fname,
       inserted,
+      updated,
       sheetName: parsed.sheetName,
     };
   } catch (e) {

@@ -633,7 +633,8 @@ app.get("/api/depreciaciones", requireAuth, async (req, res) => {
 
 app.post("/api/depreciaciones/sync-from-activos", requireAuth, async (req, res) => {
   try {
-    const out = await syncDepreciationFromActivos();
+    const annualPct = req.body?.annualPct ?? req.body?.annual_depreciation_pct ?? null;
+    const out = await syncDepreciationFromActivos({ annualPct });
     if (!out.ok) {
       if (out.reason === "no_database") {
         return res.status(503).json({
@@ -649,12 +650,22 @@ app.post("/api/depreciaciones/sync-from-activos", requireAuth, async (req, res) 
           code: out.reason,
         });
       }
+      if (out.reason === "pct_required") {
+        return res.status(400).json({
+          success: false,
+          message: out.message || "Indica annualPct.",
+          code: out.reason,
+        });
+      }
       return res.status(400).json({
         success: false,
         message: out.message || "No se pudo sincronizar.",
       });
     }
-    res.status(201).json({ success: true, data: { inserted: out.inserted ?? 0 } });
+    res.status(201).json({
+      success: true,
+      data: { inserted: out.inserted ?? 0, annualPct: out.annualPct },
+    });
   } catch (e) {
     res.status(500).json({
       success: false,
@@ -2054,6 +2065,7 @@ app.get("/catalogo.html", sendHtmlIfAuthed("catalogo.html"));
 app.get("/auxiliar-mayor.html", sendHtmlIfAuthed("auxiliar-mayor.html"));
 app.get("/libro-diario.html", sendHtmlIfAuthed("libro-diario.html"));
 app.get("/activos.html", sendHtmlIfAuthed("activos.html"));
+app.get("/carta.html", sendHtmlIfAuthed("carta.html"));
 app.get("/amortizaciones.html", sendHtmlIfAuthed("amortizaciones.html"));
 app.get("/facturas-recibidas.html", sendHtmlIfAuthed("facturas-recibidas.html"));
 app.get("/facturas-emitidas.html", sendHtmlIfAuthed("facturas-emitidas.html"));
@@ -2081,6 +2093,8 @@ app.get("/placeholder.html", (req, res) => {
   }
   res.sendFile(path.join(publicDir, "placeholder.html"));
 });
+
+app.get("/status.html", sendHtmlIfAuthed("status.html"));
 
 app.use(
   express.static(publicDir, {

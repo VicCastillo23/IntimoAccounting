@@ -34,6 +34,22 @@ if (params.get("m") === "catalogo-cuentas") {
   const h1 = document.getElementById("placeholder-title");
   if (h1) h1.textContent = title;
 
+  const msg = document.getElementById("placeholder-message");
+  const sub = document.getElementById("placeholder-sub");
+  if (m === "control-almacen") {
+    if (msg) msg.textContent = "No disponible";
+    if (sub) {
+      sub.textContent = "Próximamente";
+      sub.hidden = false;
+    }
+  } else {
+    if (msg) msg.textContent = "No disponible";
+    if (sub) {
+      sub.textContent = "Próximamente";
+      sub.hidden = false;
+    }
+  }
+
   document.querySelectorAll("[data-nav]").forEach((el) => {
     const slug = el.getAttribute("data-nav");
     el.classList.toggle("sidebar__link--active", slug === m);

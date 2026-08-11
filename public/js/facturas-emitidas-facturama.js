@@ -42,13 +42,6 @@ const SAT_UNIT_OPTIONS = [
   ["XPK", "Paquete"],
 ];
 
-async function api(url) {
-  const r = await fetch(url, { credentials: "include" });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.success) throw new Error(j.message || `Error HTTP ${r.status}`);
-  return j.data;
-}
-
 function normRfc(v) {
   return String(v || "").trim().toUpperCase();
 }
@@ -268,16 +261,19 @@ async function init() {
   const session = await initAuthShell();
   if (!session) return;
 
-  await api("/api/facturama/bridge-config");
   const note = $("#facturama-bridge-note");
-
   if (note) {
-    note.textContent = "Facturación manual independiente de tickets. Timbra directo con Facturama y guarda registro en emitidas.";
+    note.textContent =
+      "Facturación manual independiente de tickets. Timbra directo con Facturama y guarda registro en emitidas.";
   }
   wireManualForm();
 }
 
 init().catch((e) => {
   const note = $("#facturama-bridge-note");
-  if (note) note.textContent = `No se pudo abrir Facturama: ${e instanceof Error ? e.message : String(e)}`;
+  if (note) {
+    note.textContent = `No se pudo cargar la pantalla de facturación manual: ${
+      e instanceof Error ? e.message : String(e)
+    }`;
+  }
 });
