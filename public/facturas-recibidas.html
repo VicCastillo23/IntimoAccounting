@@ -34,29 +34,17 @@
       <p class="sidebar__foot">Datos en reposo cifrados (AES-256-GCM). HTTPS en producción.</p>
     </aside>
 
-    <main class="main main--report main--report-invoices">
-      <header class="main__header">
+    <main class="main main--report main--report-invoices main--invoices-compact">
+      <header class="main__header main__header--compact">
         <h1 class="main__h1">Facturas recibidas</h1>
-        <p class="main__lead">Carga ZIP del SAT con XML CFDI, valida duplicados y administra el pago con póliza automática o sugerida.</p>
       </header>
 
-      <section class="panel report-toolbar">
-        <div class="report-field">
-          <span>ZIP SAT</span>
-          <input id="fr-zip" class="report-field__input" type="file" accept=".zip,application/zip" />
-        </div>
-        <button id="fr-import-btn" class="btn btn--primary" type="button">
-          <span class="material-symbols-outlined btn__icon" aria-hidden="true">upload_file</span>
-          Importar ZIP
-        </button>
-        <p class="report-toolbar__hint">Solo XML en ZIP. El sistema deduplica por UUID CFDI y hash XML.</p>
-      </section>
+      <input id="fr-zip" class="visually-hidden" type="file" accept=".zip,application/zip" tabindex="-1" aria-hidden="true" />
 
       <div id="fr-alert" class="alert" hidden></div>
 
-      <section class="panel report-section">
-        <h2 class="report-section__title">Listado</h2>
-        <div class="report-toolbar" style="padding:0; margin:0 0 0.75rem;">
+      <section class="panel report-section report-section--flush">
+        <div class="report-toolbar report-toolbar--inline">
           <label class="report-field">Fecha póliza masiva
             <input id="fr-batch-date" class="report-field__input" type="date" />
           </label>

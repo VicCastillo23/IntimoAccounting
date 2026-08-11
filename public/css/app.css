@@ -2197,6 +2197,43 @@ select.field__input--select:disabled {
   max-width: min(1500px, 100vw - 1.5rem);
 }
 
+.main--invoices-compact .main__header--compact {
+  margin-bottom: 0.65rem;
+  padding-bottom: 0;
+}
+
+.main--invoices-compact .main__header--compact .main__h1 {
+  margin: 0;
+}
+
+.main--invoices-compact .report-section--flush {
+  margin-top: 0;
+}
+
+.main--invoices-compact .report-section--flush > .report-section__title {
+  display: none;
+}
+
+.report-toolbar--inline {
+  padding: 0;
+  margin: 0 0 0.65rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 .report-toolbar {
   display: flex;
   flex-wrap: wrap;

@@ -27,7 +27,21 @@ const NAV_GROUPS = [
     label: "Facturacion",
     items: [
       { href: "/facturas-recibidas.html", icon: "download", label: "Facturas recibidas", match: { path: "/facturas-recibidas.html" } },
+      {
+        href: "/facturas-recibidas.html#import",
+        icon: "folder_zip",
+        label: "Importar ZIP recibidas",
+        importTrigger: "recibidas",
+        match: { path: "/facturas-recibidas.html", hash: "import" },
+      },
       { href: "/facturas-emitidas.html", icon: "upload", label: "Facturas emitidas", match: { path: "/facturas-emitidas.html" } },
+      {
+        href: "/facturas-emitidas.html#import",
+        icon: "folder_zip",
+        label: "Importar ZIP emitidas",
+        importTrigger: "emitidas",
+        match: { path: "/facturas-emitidas.html", hash: "import" },
+      },
       {
         href: "/facturas-emitidas-facturama.html",
         icon: "receipt_long",
@@ -80,28 +94,36 @@ const NAV_GROUPS = [
   },
 ];
 
-function isActiveMatch(match, pathname, params) {
+function isActiveMatch(match, pathname, params, hash = "") {
   if (!match) return false;
   if (match.path !== pathname) return false;
   if (match.m && params.get("m") !== match.m) return false;
+  if (match.hash) {
+    const h = String(hash || "").replace(/^#/, "");
+    if (h !== match.hash) return false;
+  } else if (String(hash || "").replace(/^#/, "") === "import") {
+    // No marcar "Facturas X" como activa cuando el destino es Importar ZIP
+    return false;
+  }
   return true;
 }
 
 function buildLinkItem(item, isActive) {
   const externalAttrs = item.external ? ' target="_blank" rel="noopener"' : "";
+  const importAttr = item.importTrigger ? ` data-invoice-import="${item.importTrigger}"` : "";
   return `
-    <a class="sidebar__link${isActive ? " sidebar__link--active" : ""}" href="${item.href}"${externalAttrs}>
+    <a class="sidebar__link${isActive ? " sidebar__link--active" : ""}" href="${item.href}"${externalAttrs}${importAttr}>
       <span class="material-symbols-outlined" aria-hidden="true">${item.icon}</span>
       ${item.label}
     </a>
   `;
 }
 
-function buildGroup(group, pathname, params) {
+function buildGroup(group, pathname, params, hash) {
   let hasActive = false;
   const links = group.items
     .map((item) => {
-      const active = isActiveMatch(item.match, pathname, params);
+      const active = isActiveMatch(item.match, pathname, params, hash);
       if (active) hasActive = true;
       return buildLinkItem(item, active);
     })
@@ -131,7 +153,8 @@ export function initSidebarNav() {
 
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
-  const groupsHtml = NAV_GROUPS.map((group) => buildGroup(group, pathname, params)).join("");
+  const hash = window.location.hash || "";
+  const groupsHtml = NAV_GROUPS.map((group) => buildGroup(group, pathname, params, hash)).join("");
 
   nav.innerHTML = `
     ${groupsHtml}
@@ -148,6 +171,22 @@ export function initSidebarNav() {
       const expanded = btn.getAttribute("aria-expanded") === "true";
       btn.setAttribute("aria-expanded", expanded ? "false" : "true");
       section.classList.toggle("is-open", !expanded);
+    });
+  });
+
+  // En la página actual: "Importar ZIP" abre el selector de archivo sin recargar.
+  nav.querySelectorAll("[data-invoice-import]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      const kind = el.getAttribute("data-invoice-import");
+      const onRecibidas = pathname === "/facturas-recibidas.html";
+      const onEmitidas = pathname === "/facturas-emitidas.html";
+      if (kind === "recibidas" && onRecibidas) {
+        ev.preventDefault();
+        document.getElementById("fr-zip")?.click();
+      } else if (kind === "emitidas" && onEmitidas) {
+        ev.preventDefault();
+        document.getElementById("fe-zip")?.click();
+      }
     });
   });
 }

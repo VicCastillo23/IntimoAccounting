@@ -788,10 +788,14 @@ async function init() {
   if (!session) return;
   wireTableActions();
   wireColMenu();
-  $("#fr-import-btn")?.addEventListener("click", importZip);
   $("#fr-batch-pay-btn")?.addEventListener("click", () => void paySelectedInvoices());
   $("#fr-delete-btn")?.addEventListener("click", () => void deleteInvoices());
   $("#fr-clear-filters")?.addEventListener("click", () => clearFilters());
+  $("#fr-zip")?.addEventListener("change", () => void importZip());
+  if (location.hash === "#import") {
+    history.replaceState(null, "", location.pathname + location.search);
+    setTimeout(() => $("#fr-zip")?.click(), 0);
+  }
   const batchDate = $("#fr-batch-date");
   if (batchDate && !batchDate.value) batchDate.value = new Date().toISOString().slice(0, 10);
   updateBatchMeta();

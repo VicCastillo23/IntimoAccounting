@@ -34,27 +34,15 @@
       <p class="sidebar__foot">Datos en reposo cifrados (AES-256-GCM). HTTPS en producción.</p>
     </aside>
 
-    <main class="main main--report main--report-invoices">
-      <header class="main__header">
+    <main class="main main--report main--report-invoices main--invoices-compact">
+      <header class="main__header main__header--compact">
         <h1 class="main__h1">Facturas emitidas</h1>
-        <p class="main__lead">Listado interno de CFDI emitidos detectados por el módulo de facturación.</p>
       </header>
 
-      <section class="panel report-toolbar">
-        <div class="report-field">
-          <span>ZIP SAT emitidas</span>
-          <input id="fe-zip" class="report-field__input" type="file" accept=".zip,application/zip" />
-        </div>
-        <button id="fe-import-btn" class="btn btn--ghost" type="button">
-          <span class="material-symbols-outlined btn__icon" aria-hidden="true">upload_file</span>
-          Importar ZIP
-        </button>
-        <p class="report-toolbar__hint">Importa XML de CFDI emitidos; se deduplica por UUID y hash XML.</p>
-      </section>
+      <input id="fe-zip" class="visually-hidden" type="file" accept=".zip,application/zip" tabindex="-1" aria-hidden="true" />
 
-      <section class="panel report-section">
-        <h2 class="report-section__title">Listado base</h2>
-        <div class="report-toolbar" style="padding:0; margin:0 0 0.75rem;">
+      <section class="panel report-section report-section--flush">
+        <div class="report-toolbar report-toolbar--inline">
           <label class="report-field">Fecha póliza masiva
             <input id="fe-batch-date" class="report-field__input" type="date" />
           </label>
