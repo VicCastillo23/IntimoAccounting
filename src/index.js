@@ -63,6 +63,8 @@ import {
   getIssuedInvoicesByPrefixedIds,
   getIssuedInvoiceDetailByPrefixedId,
   linkPaidReceivedInvoice,
+  deleteReceivedInvoices,
+  deleteIssuedInvoices,
 } from "./store/receivedInvoicesStore.js";
 import { calcularFactorActualizacion } from "./services/inegiInpc.js";
 import { getBrandingForApi } from "./config/branding.js";
@@ -892,6 +894,28 @@ app.get("/api/invoices/received", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/invoices/received/delete", requireAuth, async (req, res) => {
+  try {
+    const confirm = String(req.body?.confirm || "").trim().toUpperCase();
+    if (confirm !== "ELIMINAR") {
+      return res.status(400).json({
+        success: false,
+        message: 'Confirmación inválida. Envía confirm: "ELIMINAR".',
+      });
+    }
+    const all = Boolean(req.body?.all);
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+    const out = await deleteReceivedInvoices({ all, ids });
+    if (!out.ok) return respondStoreError(res, out, "No se pudieron eliminar facturas recibidas.");
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al eliminar facturas recibidas",
+    });
+  }
+});
+
 app.get("/api/invoices/received/:id", requireAuth, async (req, res) => {
   try {
     const out = await getReceivedInvoiceById(req.params.id);
@@ -1182,6 +1206,28 @@ app.get("/api/invoices/issued", requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: e instanceof Error ? e.message : "Error al consultar facturas emitidas",
+    });
+  }
+});
+
+app.post("/api/invoices/issued/delete", requireAuth, async (req, res) => {
+  try {
+    const confirm = String(req.body?.confirm || "").trim().toUpperCase();
+    if (confirm !== "ELIMINAR") {
+      return res.status(400).json({
+        success: false,
+        message: 'Confirmación inválida. Envía confirm: "ELIMINAR".',
+      });
+    }
+    const all = Boolean(req.body?.all);
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+    const out = await deleteIssuedInvoices({ all, ids });
+    if (!out.ok) return respondStoreError(res, out, "No se pudieron eliminar facturas emitidas.");
+    res.json({ success: true, data: out });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al eliminar facturas emitidas",
     });
   }
 });

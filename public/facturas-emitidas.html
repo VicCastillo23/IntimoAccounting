@@ -59,6 +59,10 @@
             <input id="fe-batch-date" class="report-field__input" type="date" />
           </label>
           <button id="fe-batch-btn" class="btn btn--primary" type="button">Crear una póliza con seleccionadas</button>
+          <button id="fe-delete-btn" class="btn btn--ghost" type="button">
+            <span class="material-symbols-outlined btn__icon" aria-hidden="true">delete</span>
+            Eliminar facturas
+          </button>
           <p class="report-toolbar__hint" id="fe-batch-meta">Selecciona facturas emitidas en la tabla.</p>
         </div>
         <div class="report-toolbar fe-filter-meta" style="padding:0; margin:0 0 0.5rem;">
@@ -66,84 +70,74 @@
           <button id="fe-clear-filters" class="btn btn--text" type="button">Limpiar filtros</button>
         </div>
         <div class="table-wrap table-wrap--sticky-head fe-table-wrap">
-          <table id="fe-table" class="data-table data-table--dense">
+          <table id="fe-table" class="data-table data-table--dense data-table--col-filters">
             <thead>
               <tr>
-                <th><input id="fe-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
-                <th>
-                  <button type="button" class="col-sort" data-sort="uuid" aria-label="Ordenar por UUID">
-                    UUID<span class="col-sort__ind" aria-hidden="true"></span>
-                  </button>
+                <th class="col-head col-head--check"><input id="fe-check-all" type="checkbox" aria-label="Seleccionar todo" /></th>
+                <th class="col-head" data-col="uuid">
+                  <div class="col-head__row">
+                    <span class="col-head__label">UUID</span>
+                    <button type="button" class="col-filter-btn" data-col="uuid" aria-label="Filtrar UUID" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th>
-                  <button type="button" class="col-sort" data-sort="serie" aria-label="Ordenar por serie/folio">
-                    Serie/Folio<span class="col-sort__ind" aria-hidden="true"></span>
-                  </button>
+                <th class="col-head" data-col="serie">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Serie/Folio</span>
+                    <button type="button" class="col-filter-btn" data-col="serie" aria-label="Filtrar serie/folio" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th>
-                  <button type="button" class="col-sort" data-sort="fecha" aria-label="Ordenar por fecha">
-                    Fecha<span class="col-sort__ind" aria-hidden="true"></span>
-                  </button>
+                <th class="col-head" data-col="fecha">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Fecha</span>
+                    <button type="button" class="col-filter-btn" data-col="fecha" aria-label="Filtrar fecha" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th>
-                  <button type="button" class="col-sort" data-sort="rfc" aria-label="Ordenar por RFC cliente">
-                    RFC cliente<span class="col-sort__ind" aria-hidden="true"></span>
-                  </button>
+                <th class="col-head" data-col="rfc">
+                  <div class="col-head__row">
+                    <span class="col-head__label">RFC cliente</span>
+                    <button type="button" class="col-filter-btn" data-col="rfc" aria-label="Filtrar RFC" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th class="data-table__num">
-                  <button type="button" class="col-sort" data-sort="total" aria-label="Ordenar por total">
-                    Total<span class="col-sort__ind" aria-hidden="true"></span>
-                  </button>
+                <th class="col-head data-table__num" data-col="total">
+                  <div class="col-head__row col-head__row--end">
+                    <span class="col-head__label">Total</span>
+                    <button type="button" class="col-filter-btn" data-col="total" aria-label="Filtrar total" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th>
-                  <button type="button" class="col-sort" data-sort="estatus" aria-label="Ordenar por estatus">
-                    Estatus<span class="col-sort__ind" aria-hidden="true"></span>
-                  </button>
+                <th class="col-head" data-col="estatus">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Estatus</span>
+                    <button type="button" class="col-filter-btn" data-col="estatus" aria-label="Filtrar estatus" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th>
-                  <button type="button" class="col-sort" data-sort="poliza" aria-label="Ordenar por póliza">
-                    Póliza<span class="col-sort__ind" aria-hidden="true"></span>
-                  </button>
+                <th class="col-head" data-col="poliza">
+                  <div class="col-head__row">
+                    <span class="col-head__label">Póliza</span>
+                    <button type="button" class="col-filter-btn" data-col="poliza" aria-label="Filtrar póliza" aria-haspopup="dialog">
+                      <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                    </button>
+                  </div>
                 </th>
-                <th>XML</th>
-                <th>PDF</th>
-              </tr>
-              <tr class="data-table__filters">
-                <th aria-hidden="true"></th>
-                <th>
-                  <input id="fe-f-uuid" class="col-filter" type="search" placeholder="Buscar…" data-filter="uuid" autocomplete="off" />
-                </th>
-                <th>
-                  <input id="fe-f-serie" class="col-filter" type="search" placeholder="Serie/folio…" data-filter="serie" autocomplete="off" />
-                </th>
-                <th>
-                  <input id="fe-f-fecha" class="col-filter" type="date" data-filter="fecha" title="Filtrar por fecha exacta" />
-                </th>
-                <th>
-                  <input id="fe-f-rfc" class="col-filter" type="search" placeholder="RFC…" data-filter="rfc" autocomplete="off" />
-                </th>
-                <th class="data-table__num">
-                  <input id="fe-f-total" class="col-filter col-filter--num" type="search" placeholder="Ej. 480" data-filter="total" inputmode="decimal" autocomplete="off" />
-                </th>
-                <th>
-                  <select id="fe-f-estatus" class="col-filter" data-filter="estatus">
-                    <option value="">Todos</option>
-                  </select>
-                </th>
-                <th>
-                  <select id="fe-f-poliza" class="col-filter" data-filter="poliza">
-                    <option value="">Todas</option>
-                    <option value="__none__">Sin póliza</option>
-                    <option value="__any__">Con póliza</option>
-                  </select>
-                </th>
-                <th aria-hidden="true"></th>
-                <th aria-hidden="true"></th>
+                <th class="col-head"><span class="col-head__label">XML</span></th>
+                <th class="col-head"><span class="col-head__label">PDF</span></th>
               </tr>
             </thead>
             <tbody id="fe-tbody"></tbody>
           </table>
         </div>
+        <div id="fe-col-menu" class="col-menu" hidden role="dialog" aria-label="Filtro de columna"></div>
       </section>
 
       <section class="panel report-section">

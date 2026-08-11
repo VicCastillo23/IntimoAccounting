@@ -3211,7 +3211,8 @@ td.report-nif-cf-indent {
   flex-wrap: wrap;
 }
 
-#fr-table thead th.col-head {
+#fr-table thead th.col-head,
+#fe-table thead th.col-head {
   top: 0;
   z-index: 5;
   white-space: nowrap;
@@ -3219,26 +3220,30 @@ td.report-nif-cf-indent {
   padding: 0.55rem 0.45rem;
 }
 
-#fr-table .col-head__row {
+#fr-table .col-head__row,
+#fe-table .col-head__row {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
   max-width: 100%;
 }
 
-#fr-table .col-head__row--end {
+#fr-table .col-head__row--end,
+#fe-table .col-head__row--end {
   justify-content: flex-end;
   width: 100%;
 }
 
-#fr-table .col-head__label {
+#fr-table .col-head__label,
+#fe-table .col-head__label {
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
   line-height: 1.2;
 }
 
-#fr-table .col-filter-btn {
+#fr-table .col-filter-btn,
+#fe-table .col-filter-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3254,26 +3259,31 @@ td.report-nif-cf-indent {
   flex: 0 0 auto;
 }
 
-#fr-table .col-filter-btn .material-symbols-outlined {
+#fr-table .col-filter-btn .material-symbols-outlined,
+#fe-table .col-filter-btn .material-symbols-outlined {
   font-size: 1rem;
   line-height: 1;
 }
 
-#fr-table .col-filter-btn:hover {
+#fr-table .col-filter-btn:hover,
+#fe-table .col-filter-btn:hover {
   background: rgba(0, 0, 0, 0.06);
   color: #202124;
 }
 
-#fr-table .col-filter-btn--active {
+#fr-table .col-filter-btn--active,
+#fe-table .col-filter-btn--active {
   color: #1a73e8;
   background: rgba(26, 115, 232, 0.12);
 }
 
-#fr-table .col-filter-btn--sorted:not(.col-filter-btn--active) {
+#fr-table .col-filter-btn--sorted:not(.col-filter-btn--active),
+#fe-table .col-filter-btn--sorted:not(.col-filter-btn--active) {
   color: #1a73e8;
 }
 
-#fr-table th.col-head--check {
+#fr-table th.col-head--check,
+#fe-table th.col-head--check {
   width: 2.25rem;
   text-align: center;
 }
@@ -3477,18 +3487,21 @@ td.report-nif-cf-indent {
   vertical-align: middle;
 }
 
+
 .fe-table-wrap {
-  overflow-x: visible;
+  overflow-x: auto;
 }
 
 #fe-table {
-  table-layout: fixed;
-  width: 100%;
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
 }
 
 #fe-table thead th,
 #fe-table tbody td {
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .fe-filter-meta {
@@ -3499,79 +3512,15 @@ td.report-nif-cf-indent {
   flex-wrap: wrap;
 }
 
-#fe-table .col-sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
-  text-align: inherit;
+#fe-table tbody td {
+  white-space: nowrap;
+  vertical-align: top;
+  padding: 0.7rem 0.5rem;
 }
 
-#fe-table .col-sort:hover,
-#fe-table .col-sort--active {
-  color: var(--intimo-primary, #2e77bb);
+#fe-table tbody td:nth-child(2) {
+  white-space: normal;
+  min-width: 9rem;
+  max-width: 14rem;
 }
 
-#fe-table .col-sort__ind {
-  font-size: 0.7em;
-  opacity: 0.85;
-}
-
-#fe-table .data-table__num .col-sort {
-  justify-content: flex-end;
-  width: 100%;
-}
-
-#fe-table thead tr:first-child th {
-  top: 0;
-  z-index: 5;
-}
-
-#fe-table thead tr.data-table__filters th {
-  top: 2.35rem;
-  z-index: 4;
-  padding-top: 0.35rem;
-  padding-bottom: 0.45rem;
-  vertical-align: middle;
-  font-weight: 400;
-  box-shadow: 0 1px 0 var(--intimo-outline);
-}
-
-#fe-table .col-filter {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0.28rem 0.4rem;
-  border: 1px solid var(--intimo-outline, #c8c8c8);
-  border-radius: 4px;
-  background: #fff;
-  color: inherit;
-  font: inherit;
-  font-size: 0.78rem;
-  line-height: 1.2;
-}
-
-#fe-table .col-filter:focus {
-  outline: 2px solid rgba(46, 119, 187, 0.35);
-  outline-offset: 1px;
-  border-color: var(--intimo-primary, #2e77bb);
-}
-
-#fe-table .col-filter--num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-#fe-table select.col-filter {
-  cursor: pointer;
-}

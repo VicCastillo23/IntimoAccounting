@@ -822,3 +822,106 @@ export async function linkPaidReceivedInvoice(idOrPublicId, polizaId, mode) {
     throw e;
   }
 }
+
+/**
+ * Elimina facturas recibidas por public_id o todas.
+ * @param {{ ids?: string[], all?: boolean }} p
+ */
+export async function deleteReceivedInvoices(p = {}) {
+  const pool = getPool();
+  if (!pool) return noDb();
+  const all = Boolean(p.all);
+  const ids = [...new Set((p.ids || []).map((x) => String(x || "").trim()).filter(Boolean))];
+  try {
+    if (all) {
+      const del = await pool.query(`DELETE FROM invoicing.received_invoices`);
+      await pool.query(`DELETE FROM invoicing.received_import_batches`);
+      return { ok: true, deleted: del.rowCount || 0, mode: "all" };
+    }
+    if (!ids.length) {
+      return { ok: false, reason: "validation", message: "Indica facturas a eliminar o all=true." };
+    }
+    const del = await pool.query(
+      `DELETE FROM invoicing.received_invoices WHERE public_id::text = ANY($1::text[])`,
+      [ids]
+    );
+    return { ok: true, deleted: del.rowCount || 0, mode: "ids" };
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && e.code === "42P01") {
+      return { ok: false, reason: "missing_table", message: "Falta migración de facturas recibidas." };
+    }
+    throw e;
+  }
+}
+
+/**
+ * Elimina facturas emitidas (invoicing.invoices) y limpia CFDI en tickets POS.
+ * IDs prefijados: inv-<n> | pos-<n>. Con all=true limpia todo el listado emitidas.
+ * @param {{ ids?: string[], all?: boolean }} p
+ */
+export async function deleteIssuedInvoices(p = {}) {
+  const pool = getPool();
+  if (!pool) return noDb();
+  const all = Boolean(p.all);
+  const ids = [...new Set((p.ids || []).map((x) => String(x || "").trim()).filter(Boolean))];
+  try {
+    if (all) {
+      const inv = await pool.query(`DELETE FROM invoicing.invoices`);
+      const pos = await pool.query(`
+        UPDATE pos.purchase_orders
+           SET cfdi_uuid = '',
+               invoice_pdf_url = '',
+               invoice_xml_url = ''
+         WHERE length(trim(coalesce(cfdi_uuid, ''))) > 0
+            OR length(trim(coalesce(invoice_pdf_url, ''))) > 0
+            OR length(trim(coalesce(invoice_xml_url, ''))) > 0
+      `);
+      return {
+        ok: true,
+        deleted: (inv.rowCount || 0) + (pos.rowCount || 0),
+        invoicesDeleted: inv.rowCount || 0,
+        posCleared: pos.rowCount || 0,
+        mode: "all",
+      };
+    }
+    if (!ids.length) {
+      return { ok: false, reason: "validation", message: "Indica facturas a eliminar o all=true." };
+    }
+    const invIds = ids
+      .filter((x) => /^inv-\d+$/i.test(x))
+      .map((x) => Number(String(x).slice(4)))
+      .filter((n) => Number.isFinite(n));
+    const posIds = ids
+      .filter((x) => /^pos-\d+$/i.test(x))
+      .map((x) => Number(String(x).slice(4)))
+      .filter((n) => Number.isFinite(n));
+    let deleted = 0;
+    let invoicesDeleted = 0;
+    let posCleared = 0;
+    if (invIds.length) {
+      const inv = await pool.query(`DELETE FROM invoicing.invoices WHERE id = ANY($1::bigint[])`, [invIds]);
+      invoicesDeleted = inv.rowCount || 0;
+      deleted += invoicesDeleted;
+    }
+    if (posIds.length) {
+      const pos = await pool.query(
+        `
+        UPDATE pos.purchase_orders
+           SET cfdi_uuid = '',
+               invoice_pdf_url = '',
+               invoice_xml_url = ''
+         WHERE id = ANY($1::bigint[])
+        `,
+        [posIds]
+      );
+      posCleared = pos.rowCount || 0;
+      deleted += posCleared;
+    }
+    return { ok: true, deleted, invoicesDeleted, posCleared, mode: "ids" };
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && (e.code === "42P01" || e.code === "42703")) {
+      return { ok: false, reason: "missing_table", message: "Falta migración de facturación emitida." };
+    }
+    throw e;
+  }
+}

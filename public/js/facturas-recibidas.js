@@ -621,6 +621,36 @@ async function paySelectedInvoices() {
   }
 }
 
+async function deleteInvoices() {
+  const hasSel = selectedInvoiceIds.size > 0;
+  const n = hasSel ? selectedInvoiceIds.size : allRows.length;
+  if (!n) {
+    setAlert("No hay facturas para eliminar.", false);
+    return;
+  }
+  const scope = hasSel ? `${n} factura(s) seleccionada(s)` : `TODAS las facturas recibidas (${n})`;
+  if (!confirm(`¿Eliminar ${scope}?`)) return;
+  if (!confirm("Segunda confirmación: esta acción no se puede deshacer. ¿Continuar?")) return;
+  try {
+    const data = await api("/api/invoices/received/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirm: "ELIMINAR",
+        all: !hasSel,
+        ids: hasSel ? [...selectedInvoiceIds] : [],
+      }),
+    });
+    selectedInvoiceIds.clear();
+    setAlert(`Eliminadas: ${Number(data?.deleted) || 0}.`);
+    const box = $("#fr-detail");
+    if (box) box.innerHTML = `<p class="report-muted">Selecciona una factura para ver su detalle.</p>`;
+    await loadReceivedInvoices();
+  } catch (e) {
+    setAlert(e instanceof Error ? e.message : String(e), false);
+  }
+}
+
 function wireTableActions() {
   $("#fr-tbody")?.addEventListener("click", async (ev) => {
     const t = ev.target instanceof HTMLElement ? ev.target : null;
@@ -760,6 +790,7 @@ async function init() {
   wireColMenu();
   $("#fr-import-btn")?.addEventListener("click", importZip);
   $("#fr-batch-pay-btn")?.addEventListener("click", () => void paySelectedInvoices());
+  $("#fr-delete-btn")?.addEventListener("click", () => void deleteInvoices());
   $("#fr-clear-filters")?.addEventListener("click", () => clearFilters());
   const batchDate = $("#fr-batch-date");
   if (batchDate && !batchDate.value) batchDate.value = new Date().toISOString().slice(0, 10);
