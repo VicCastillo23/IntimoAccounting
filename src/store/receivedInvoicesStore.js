@@ -356,7 +356,7 @@ export async function importIssuedInvoicesZip(buffer, opts = {}) {
 export async function listReceivedInvoices(p = {}) {
   const pool = getPool();
   if (!pool) return noDb();
-  const limit = Math.max(1, Math.min(200, Number(p.limit) || 50));
+  const limit = Math.max(1, Math.min(5000, Number(p.limit) || 50));
   const page = Math.max(1, Number(p.page) || 1);
   const offset = (page - 1) * limit;
   const q = String(p.query || "").trim();
@@ -491,7 +491,7 @@ export async function updateReceivedInvoiceStatus(idOrPublicId, status) {
 export async function listIssuedInvoicesBase(p = {}) {
   const pool = getPool();
   if (!pool) return noDb();
-  const limit = Math.max(1, Math.min(200, Number(p.limit) || 50));
+  const limit = Math.max(1, Math.min(5000, Number(p.limit) || 50));
   const page = Math.max(1, Number(p.page) || 1);
   const offset = (page - 1) * limit;
   try {

@@ -43,23 +43,28 @@
 
       <div id="fr-alert" class="alert" hidden></div>
 
-      <section class="panel report-section report-section--flush">
-        <div class="report-toolbar report-toolbar--inline">
-          <label class="report-field">Fecha póliza masiva
-            <input id="fr-batch-date" class="report-field__input" type="date" />
-          </label>
-          <button id="fr-batch-pay-btn" class="btn btn--primary" type="button">Crear una póliza con seleccionadas</button>
-          <button id="fr-delete-btn" class="btn btn--ghost" type="button">
-            <span class="material-symbols-outlined btn__icon" aria-hidden="true">delete</span>
-            Eliminar facturas
-          </button>
-          <button id="fr-import-btn" class="btn btn--ghost" type="button">
-            <span class="material-symbols-outlined btn__icon" aria-hidden="true">folder_zip</span>
-            Importar ZIP
-          </button>
-          <p class="report-toolbar__hint" id="fr-batch-meta">Selecciona facturas en la tabla.</p>
-        </div>
-        <div class="report-toolbar fr-filter-meta" style="padding:0; margin:0 0 0.5rem;">
+      <div class="report-toolbar report-toolbar--inline invoices-actions">
+        <label class="report-field">Fecha póliza masiva
+          <input id="fr-batch-date" class="report-field__input" type="date" />
+        </label>
+        <button id="fr-batch-pay-btn" class="btn btn--primary" type="button">Crear una póliza con seleccionadas</button>
+        <button id="fr-delete-btn" class="btn btn--ghost" type="button">
+          <span class="material-symbols-outlined btn__icon" aria-hidden="true">delete</span>
+          Eliminar facturas
+        </button>
+        <button id="fr-import-btn" class="btn btn--ghost" type="button">
+          <span class="material-symbols-outlined btn__icon" aria-hidden="true">folder_zip</span>
+          Importar ZIP
+        </button>
+        <p class="report-toolbar__hint" id="fr-batch-meta">Selecciona facturas en la tabla.</p>
+      </div>
+
+      <section class="panel report-section report-section--flush invoices-detail-panel">
+        <div id="fr-detail" class="report-muted">Selecciona una factura para ver su detalle.</div>
+      </section>
+
+      <section class="panel report-section report-section--flush invoices-list-panel">
+        <div class="report-toolbar fr-filter-meta invoices-list-meta">
           <p class="report-toolbar__hint" id="fr-filter-meta">Mostrando todas las facturas.</p>
           <button id="fr-clear-filters" class="btn btn--text" type="button">Limpiar filtros</button>
         </div>
@@ -169,11 +174,8 @@
             <tbody id="fr-tbody"></tbody>
           </table>
         </div>
+        <nav id="fr-pager" class="invoices-pager" aria-label="Paginación de facturas recibidas"></nav>
         <div id="fr-col-menu" class="col-menu" hidden role="dialog" aria-label="Filtro de columna"></div>
-      </section>
-
-      <section class="panel report-section">
-        <div id="fr-detail" class="report-muted">Selecciona una factura para ver su detalle.</div>
       </section>
     </main>
   </div>

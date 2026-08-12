@@ -1,4 +1,5 @@
 import { initAuthShell } from "./auth-shell.js";
+import { INVOICES_PAGE_SIZE, renderInvoicesPager } from "./invoices-pager.js";
 
 const $ = (s) => document.querySelector(s);
 const selectedInvoiceIds = new Set();
@@ -7,6 +8,7 @@ const selectedInvoiceIds = new Set();
 let allRows = [];
 /** @type {{ key: string, dir: "asc" | "desc" }} */
 let sortState = { key: "fecha", dir: "desc" };
+let currentPage = 1;
 
 /** @type {Record<string, Set<string> | null>} null = sin filtro (todos) */
 const columnFilters = {
@@ -280,16 +282,20 @@ function filtersActive() {
   return COLUMNS.some((c) => columnFilters[c] instanceof Set);
 }
 
-function updateFilterMeta(shown, total) {
+function updateFilterMeta(shown, total, pageFrom, pageTo, pages) {
   const meta = $("#fr-filter-meta");
   if (!meta) return;
   if (!total) {
     meta.textContent = "Sin facturas recibidas disponibles.";
     return;
   }
-  meta.textContent = filtersActive()
-    ? `Filtro activo: ${shown} de ${total} factura(s).`
-    : `Mostrando ${shown} de ${total} factura(s).`;
+  const range = `Mostrando ${pageFrom}–${pageTo} de ${shown}`;
+  const pagesLabel = pages > 1 ? ` · ${pages} página(s)` : "";
+  if (filtersActive()) {
+    meta.textContent = `Filtro activo: ${range} (de ${total} cargadas)${pagesLabel}`;
+    return;
+  }
+  meta.textContent = `${range}${pagesLabel}`;
 }
 
 function updateFilterBtnStates() {
@@ -334,14 +340,13 @@ function render(rows) {
   if (!tbody) return;
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="13">Sin resultados.</td></tr>`;
-    selectedInvoiceIds.clear();
     updateBatchMeta();
     syncCheckAllState();
     return;
   }
   const available = new Set(rows.map((r) => String(r.public_id)));
   for (const id of [...selectedInvoiceIds]) {
-    if (!available.has(id)) selectedInvoiceIds.delete(id);
+    if (!available.has(id) && !allRows.some((r) => String(r.public_id) === id)) selectedInvoiceIds.delete(id);
   }
   tbody.innerHTML = rows
     .map(
@@ -370,19 +375,36 @@ function render(rows) {
   syncCheckAllState();
 }
 
-function applyView() {
+function applyView({ resetPage = false } = {}) {
+  if (resetPage) currentPage = 1;
   const filtered = allRows.filter((r) => rowMatches(r));
   filtered.sort((a, b) => compareRows(a, b, sortState.key, sortState.dir));
-  updateFilterMeta(filtered.length, allRows.length);
+  const pages = Math.max(1, Math.ceil(filtered.length / INVOICES_PAGE_SIZE));
+  if (currentPage > pages) currentPage = pages;
+  const start = (currentPage - 1) * INVOICES_PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + INVOICES_PAGE_SIZE);
+  const pageFrom = filtered.length ? start + 1 : 0;
+  const pageTo = start + pageRows.length;
+  updateFilterMeta(filtered.length, allRows.length, pageFrom, pageTo, pages);
   updateFilterBtnStates();
-  render(filtered);
+  render(pageRows);
+  renderInvoicesPager({
+    container: $("#fr-pager"),
+    page: currentPage,
+    pageSize: INVOICES_PAGE_SIZE,
+    total: filtered.length,
+    onPage: (p) => {
+      currentPage = p;
+      applyView();
+    },
+  });
 }
 
 function clearFilters() {
   for (const col of COLUMNS) columnFilters[col] = null;
   sortState = { key: "fecha", dir: "desc" };
   closeColMenu();
-  applyView();
+  applyView({ resetPage: true });
 }
 
 function closeColMenu() {
@@ -490,7 +512,7 @@ function acceptColMenu() {
     columnFilters[col] = new Set(draft);
   }
   closeColMenu();
-  applyView();
+  applyView({ resetPage: true });
 }
 
 async function loadReceivedInvoices() {
@@ -498,9 +520,9 @@ async function loadReceivedInvoices() {
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="13">Cargando...</td></tr>`;
   try {
-    const data = await api(`/api/invoices/received?limit=200`);
+    const data = await api(`/api/invoices/received?limit=5000`);
     allRows = Array.isArray(data.rows) ? data.rows : [];
-    applyView();
+    applyView({ resetPage: true });
   } catch (e) {
     allRows = [];
     tbody.innerHTML = `<tr><td colspan="13">No se pudo cargar (${escapeHtml(e.message)}).</td></tr>`;
@@ -710,12 +732,12 @@ function wireColMenu() {
       const act = actBtn.getAttribute("data-act");
       if (act === "sort-asc") {
         sortState = { key: openMenu.col, dir: "asc" };
-        applyView();
+        applyView({ resetPage: true });
         return;
       }
       if (act === "sort-desc") {
         sortState = { key: openMenu.col, dir: "desc" };
-        applyView();
+        applyView({ resetPage: true });
         return;
       }
       if (act === "select-all") {
