@@ -14,17 +14,40 @@ function ensureFavicon() {
 
 function ensureSidebarLogo() {
   const brand = document.querySelector(".sidebar__brand");
-  if (!brand || brand.querySelector(".sidebar__brand-icon")) return;
+  if (!brand) return;
+  brand.querySelectorAll(".sidebar__wordmark, .sidebar__app-label").forEach((el) => el.remove());
+  if (brand.querySelector(".sidebar__brand-icon")) return;
   const img = document.createElement("img");
   img.className = "sidebar__brand-icon";
   img.src = SIDEBAR_LOGO_SRC;
-  img.alt = "Intimo";
+  img.alt = "Íntimo";
   img.decoding = "async";
   img.loading = "eager";
-  brand.insertBefore(img, brand.firstChild);
+  brand.prepend(img);
+}
+
+function ensureMobileBarLogo() {
+  const brand = document.querySelector(".app-mobile-bar__brand");
+  if (!brand) return;
+  brand.querySelectorAll(".app-mobile-bar__wordmark, .app-mobile-bar__sub").forEach((el) => el.remove());
+  if (brand.querySelector(".app-mobile-bar__logo")) return;
+  const img = document.createElement("img");
+  img.className = "app-mobile-bar__logo";
+  img.src = SIDEBAR_LOGO_SRC;
+  img.alt = "Íntimo";
+  img.decoding = "async";
+  img.loading = "eager";
+  brand.prepend(img);
 }
 
 export function applyShellBranding() {
   ensureFavicon();
   ensureSidebarLogo();
+  ensureMobileBarLogo();
+}
+
+/** @param {string | null | undefined} username */
+export function formatSessionUserLabel(username) {
+  const name = String(username || "").trim() || "—";
+  return `Usuario: ${name}`;
 }

@@ -2,7 +2,7 @@ import { initMobileNav } from "./mobile-nav.js";
 import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
 import { initPolizaPrintBranding, refreshPolizaPrintHeader } from "./report-print-branding.js";
 import { initSidebarNav } from "./sidebar-nav.js";
-import { applyShellBranding } from "./shell-branding.js";
+import { applyShellBranding, formatSessionUserLabel } from "./shell-branding.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -1207,7 +1207,7 @@ async function boot() {
   sessionFiscalYear = fiscalYear;
 
   const el = document.getElementById("session-user");
-  if (el) el.textContent = j.user.username;
+  if (el) el.textContent = formatSessionUserLabel(j.user.username);
   applyShellBranding();
   injectFiscalSidebar(fiscalYear, () => void load());
   initSidebarNav();

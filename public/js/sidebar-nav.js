@@ -80,11 +80,33 @@ const NAV_GROUPS = [
   },
 ];
 
+const OPEN_GROUPS_KEY = "intimo.sidebar.openGroups";
+
 function isActiveMatch(match, pathname, params) {
   if (!match) return false;
   if (match.path !== pathname) return false;
   if (match.m && params.get("m") !== match.m) return false;
   return true;
+}
+
+function readOpenGroups() {
+  try {
+    const raw = sessionStorage.getItem(OPEN_GROUPS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return new Set(parsed.map(String));
+  } catch {
+    return null;
+  }
+}
+
+function writeOpenGroups(ids) {
+  try {
+    sessionStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify([...ids]));
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 function buildLinkItem(item, isActive) {
@@ -97,7 +119,7 @@ function buildLinkItem(item, isActive) {
   `;
 }
 
-function buildGroup(group, pathname, params) {
+function buildGroup(group, pathname, params, openIds) {
   let hasActive = false;
   const links = group.items
     .map((item) => {
@@ -107,22 +129,31 @@ function buildGroup(group, pathname, params) {
     })
     .join("");
 
+  const isOpen = openIds.has(group.id);
   return `
-    <section class="sidebar__group${hasActive ? " is-open" : ""}" data-sidebar-group="${group.id}">
+    <section class="sidebar__group${isOpen ? " is-open" : ""}" data-sidebar-group="${group.id}">
       <button
         type="button"
         class="sidebar__group-toggle"
-        aria-expanded="${hasActive ? "true" : "false"}"
+        aria-expanded="${isOpen ? "true" : "false"}"
         aria-controls="sidebar-group-panel-${group.id}"
       >
         <span class="sidebar__section-title">${group.label}</span>
         <span class="material-symbols-outlined sidebar__group-chevron" aria-hidden="true">expand_more</span>
       </button>
-      <div class="sidebar__group-panel" id="sidebar-group-panel-${group.id}">
+      <div class="sidebar__group-panel" id="sidebar-group-panel-${group.id}"${hasActive ? ' data-has-active="1"' : ""}>
         ${links}
       </div>
     </section>
   `;
+}
+
+function collectOpenGroupIds(nav) {
+  return new Set(
+    [...nav.querySelectorAll(".sidebar__group.is-open")]
+      .map((el) => el.getAttribute("data-sidebar-group"))
+      .filter(Boolean)
+  );
 }
 
 export function initSidebarNav() {
@@ -131,7 +162,20 @@ export function initSidebarNav() {
 
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
-  const groupsHtml = NAV_GROUPS.map((group) => buildGroup(group, pathname, params)).join("");
+
+  let activeGroupId = null;
+  for (const group of NAV_GROUPS) {
+    if (group.items.some((item) => isActiveMatch(item.match, pathname, params))) {
+      activeGroupId = group.id;
+      break;
+    }
+  }
+
+  const stored = readOpenGroups();
+  const openIds = stored ? new Set(stored) : new Set(activeGroupId ? [activeGroupId] : []);
+  if (activeGroupId) openIds.add(activeGroupId);
+
+  const groupsHtml = NAV_GROUPS.map((group) => buildGroup(group, pathname, params, openIds)).join("");
 
   nav.innerHTML = `
     ${groupsHtml}
@@ -141,6 +185,8 @@ export function initSidebarNav() {
     </button>
   `;
 
+  writeOpenGroups(openIds);
+
   nav.querySelectorAll(".sidebar__group-toggle").forEach((btn) => {
     btn.addEventListener("click", () => {
       const section = btn.closest(".sidebar__group");
@@ -148,6 +194,7 @@ export function initSidebarNav() {
       const expanded = btn.getAttribute("aria-expanded") === "true";
       btn.setAttribute("aria-expanded", expanded ? "false" : "true");
       section.classList.toggle("is-open", !expanded);
+      writeOpenGroups(collectOpenGroupIds(nav));
     });
   });
 }

@@ -1,5 +1,4 @@
-import { initMobileNav } from "./mobile-nav.js";
-import { ensureFiscalYear, injectFiscalSidebar } from "./fiscal-session.js";
+import { initAuthShell } from "./auth-shell.js";
 import {
   buildSatDisplayById,
   intimoSatCodeTreeDepth,
@@ -625,49 +624,17 @@ function wireUi() {
       clearForm();
     }
   });
-
-  $("#btn-logout")?.addEventListener("click", async () => {
-    try {
-      await apiFetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      /* ignorar */
-    }
-    window.location.href = "/login.html";
-  });
 }
 
 async function boot() {
-  let me;
-  try {
-    me = await apiFetch("/api/auth/me");
-  } catch {
-    showAlert("Error de red. No se pudo comprobar la sesión.");
-    return;
-  }
-  let j;
-  try {
-    j = await parseJsonResponse(me);
-  } catch (e) {
-    showAlert(e instanceof Error ? e.message : String(e));
-    return;
-  }
-  if (!j.success || !j.user) {
-    window.location.href = "/login.html";
-    return;
-  }
-  let fiscalYear = j.fiscalYear;
-  if (fiscalYear == null) {
-    fiscalYear = await ensureFiscalYear();
-    if (fiscalYear == null) return;
-  }
-  const el = document.getElementById("session-user");
-  if (el) el.textContent = j.user.username;
-  injectFiscalSidebar(fiscalYear, async () => {
-    await loadSat();
-    await loadChart();
+  const session = await initAuthShell({
+    onFiscalChange: async () => {
+      await loadSat();
+      await loadChart();
+    },
   });
+  if (!session) return;
   wireUi();
-  initMobileNav();
   await loadSat();
   await loadChart();
 }

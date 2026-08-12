@@ -1,5 +1,4 @@
 import { initAuthShell } from "./auth-shell.js";
-import { initSidebarNav } from "./sidebar-nav.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -253,7 +252,6 @@ async function saveProduct() {
 }
 
 async function boot() {
-  initSidebarNav();
   const session = await initAuthShell();
   if (!session) return;
 
