@@ -3338,6 +3338,15 @@ td.report-nif-cf-indent {
   max-width: 14rem;
 }
 
+#fr-table tbody td:nth-child(3),
+#fe-table tbody td:nth-child(3) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 6.5rem;
+  max-width: 10.5rem;
+}
+
 /* Menú tipo Sheets */
 .col-menu {
   position: fixed;
