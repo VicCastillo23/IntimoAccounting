@@ -199,6 +199,10 @@ body.nav-drawer-open .nav-backdrop {
 
 .sidebar__group-chevron {
   font-size: 1.1rem;
+  transition: none;
+}
+
+.sidebar--ready .sidebar__group-chevron {
   transition: transform 0.16s ease;
 }
 

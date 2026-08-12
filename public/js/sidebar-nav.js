@@ -1,4 +1,6 @@
-const NAV_GROUPS = [
+const BOOT = typeof window !== "undefined" ? window.__INTIMO_SIDEBAR_BOOT__ : null;
+
+const NAV_GROUPS = BOOT?.NAV_GROUPS || [
   {
     id: "contabilidad",
     label: "Contabilidad",
@@ -80,7 +82,7 @@ const NAV_GROUPS = [
   },
 ];
 
-const OPEN_GROUPS_KEY = "intimo.sidebar.openGroups";
+const OPEN_GROUPS_KEY = BOOT?.OPEN_GROUPS_KEY || "intimo.sidebar.openGroups";
 
 function isActiveMatch(match, pathname, params) {
   if (!match) return false;
@@ -107,6 +109,45 @@ function writeOpenGroups(ids) {
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+function collectOpenGroupIds(nav) {
+  return new Set(
+    [...nav.querySelectorAll(".sidebar__group.is-open")]
+      .map((el) => el.getAttribute("data-sidebar-group"))
+      .filter(Boolean)
+  );
+}
+
+function findActiveGroupId(pathname, params) {
+  for (const group of NAV_GROUPS) {
+    if (group.items.some((item) => isActiveMatch(item.match, pathname, params))) {
+      return group.id;
+    }
+  }
+  return null;
+}
+
+function hydrateExistingNav(nav, pathname, params, openIds) {
+  const activeHrefs = new Set();
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) {
+      if (isActiveMatch(item.match, pathname, params)) activeHrefs.add(item.href);
+    }
+  }
+  nav.querySelectorAll(".sidebar__link").forEach((link) => {
+    if (!(link instanceof HTMLAnchorElement) || link.id === "btn-logout") return;
+    const href = link.getAttribute("href") || "";
+    link.classList.toggle("sidebar__link--active", activeHrefs.has(href));
+  });
+
+  nav.querySelectorAll(".sidebar__group").forEach((section) => {
+    const id = section.getAttribute("data-sidebar-group");
+    const isOpen = Boolean(id && openIds.has(id));
+    section.classList.toggle("is-open", isOpen);
+    const btn = section.querySelector(".sidebar__group-toggle");
+    if (btn) btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
 }
 
 function buildLinkItem(item, isActive) {
@@ -148,12 +189,21 @@ function buildGroup(group, pathname, params, openIds) {
   `;
 }
 
-function collectOpenGroupIds(nav) {
-  return new Set(
-    [...nav.querySelectorAll(".sidebar__group.is-open")]
-      .map((el) => el.getAttribute("data-sidebar-group"))
-      .filter(Boolean)
-  );
+function wireToggleDelegation(nav) {
+  if (nav.dataset.sidebarWired === "1") return;
+  nav.dataset.sidebarWired = "1";
+  nav.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof Element)) return;
+    const btn = t.closest(".sidebar__group-toggle");
+    if (!(btn instanceof HTMLElement) || !nav.contains(btn)) return;
+    const section = btn.closest(".sidebar__group");
+    if (!section) return;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", expanded ? "false" : "true");
+    section.classList.toggle("is-open", !expanded);
+    writeOpenGroups(collectOpenGroupIds(nav));
+  });
 }
 
 export function initSidebarNav() {
@@ -162,39 +212,30 @@ export function initSidebarNav() {
 
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
-
-  let activeGroupId = null;
-  for (const group of NAV_GROUPS) {
-    if (group.items.some((item) => isActiveMatch(item.match, pathname, params))) {
-      activeGroupId = group.id;
-      break;
-    }
-  }
+  const activeGroupId = findActiveGroupId(pathname, params);
 
   const stored = readOpenGroups();
   const openIds = stored ? new Set(stored) : new Set(activeGroupId ? [activeGroupId] : []);
   if (activeGroupId) openIds.add(activeGroupId);
 
-  const groupsHtml = NAV_GROUPS.map((group) => buildGroup(group, pathname, params, openIds)).join("");
+  const alreadyBooted = nav.dataset.sidebarBooted === "1" && nav.querySelector("[data-sidebar-group]");
 
-  nav.innerHTML = `
-    ${groupsHtml}
-    <button type="button" class="sidebar__link sidebar__link--as-btn" id="btn-logout">
-      <span class="material-symbols-outlined" aria-hidden="true">logout</span>
-      Cerrar sesion
-    </button>
-  `;
+  if (alreadyBooted) {
+    // Evita reconstruir el DOM (causa del parpadeo). Solo sincroniza activo/abierto.
+    hydrateExistingNav(nav, pathname, params, openIds);
+  } else {
+    const groupsHtml = NAV_GROUPS.map((group) => buildGroup(group, pathname, params, openIds)).join("");
+    nav.innerHTML = `
+      ${groupsHtml}
+      <button type="button" class="sidebar__link sidebar__link--as-btn" id="btn-logout">
+        <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+        Cerrar sesion
+      </button>
+    `;
+    nav.dataset.sidebarBooted = "1";
+  }
 
   writeOpenGroups(openIds);
-
-  nav.querySelectorAll(".sidebar__group-toggle").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const section = btn.closest(".sidebar__group");
-      if (!section) return;
-      const expanded = btn.getAttribute("aria-expanded") === "true";
-      btn.setAttribute("aria-expanded", expanded ? "false" : "true");
-      section.classList.toggle("is-open", !expanded);
-      writeOpenGroups(collectOpenGroupIds(nav));
-    });
-  });
+  wireToggleDelegation(nav);
+  document.getElementById("app-sidebar")?.classList.add("sidebar--ready");
 }

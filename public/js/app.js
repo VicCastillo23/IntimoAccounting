@@ -1208,6 +1208,11 @@ async function boot() {
 
   const el = document.getElementById("session-user");
   if (el) el.textContent = formatSessionUserLabel(j.user.username);
+  try {
+    sessionStorage.setItem("intimo.sidebar.userLabel", formatSessionUserLabel(j.user.username));
+  } catch {
+    /* ignore */
+  }
   applyShellBranding();
   injectFiscalSidebar(fiscalYear, () => void load());
   initSidebarNav();

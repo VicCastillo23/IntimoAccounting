@@ -16,6 +16,11 @@ export async function initAuthShell(options = {}) {
   }
   const el = document.getElementById("session-user");
   if (el) el.textContent = formatSessionUserLabel(j.user.username);
+  try {
+    sessionStorage.setItem("intimo.sidebar.userLabel", formatSessionUserLabel(j.user.username));
+  } catch {
+    /* ignore */
+  }
   applyShellBranding();
 
   let fiscalYear = j.fiscalYear;
