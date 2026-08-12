@@ -54,6 +54,7 @@
               <span class="material-symbols-outlined search-field__icon" aria-hidden="true">search</span>
               <input id="carta-q" class="search-field__input" type="search" placeholder="Buscar producto…" autocomplete="off" />
             </label>
+            <button type="button" class="btn btn--ghost btn--sm" id="btn-carta-add-category">Nueva categoría</button>
             <button type="button" class="btn btn--primary btn--sm" id="btn-carta-add">Nuevo producto</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-carta-reload">Actualizar</button>
           </div>
@@ -107,6 +108,13 @@
             <span class="field__label">Categoría</span>
             <select class="field__input" id="carta-form-category"></select>
           </label>
+          <div class="field field--span carta-new-category">
+            <span class="field__label">¿No está la categoría?</span>
+            <div class="carta-new-category__row">
+              <input class="field__input" id="carta-new-category-name" type="text" maxlength="120" placeholder="Nombre de la nueva categoría" autocomplete="off" />
+              <button type="button" class="btn btn--ghost btn--sm" id="btn-carta-create-category">Crear categoría</button>
+            </div>
+          </div>
           <label class="field field--span">
             <span class="field__label">Descripción (opcional)</span>
             <textarea class="field__input" id="carta-form-desc" rows="2" autocomplete="off"></textarea>
@@ -120,6 +128,28 @@
       </div>
       <div class="modal__footer">
         <button type="button" class="btn btn--primary" id="btn-carta-modal-save">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-carta-category" hidden aria-hidden="true">
+    <div class="modal modal--account" role="dialog" aria-modal="true" aria-labelledby="modal-carta-category-title" tabindex="-1">
+      <div class="modal__header modal__header--account">
+        <div class="modal__header-text">
+          <h2 class="modal__title" id="modal-carta-category-title">Nueva categoría</h2>
+          <p class="modal__subtitle">Puedes crear tantas como necesites; la tablet las verá al sincronizar.</p>
+        </div>
+        <button type="button" class="btn btn--text" id="btn-carta-category-cancel">Cerrar</button>
+      </div>
+      <div class="modal__body">
+        <label class="field field--span">
+          <span class="field__label">Nombre</span>
+          <input class="field__input" id="carta-category-name" type="text" maxlength="120" placeholder="Ej. Seasonal, Merch, Combos…" autocomplete="off" required />
+        </label>
+        <div id="carta-category-error" class="alert alert--error" hidden></div>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--primary" id="btn-carta-category-save">Crear categoría</button>
       </div>
     </div>
   </div>

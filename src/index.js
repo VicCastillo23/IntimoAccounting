@@ -37,6 +37,7 @@ import {
   getCatalogForSync,
   getCatalogStats,
   createCatalogProduct,
+  createCatalogCategory,
   updateCatalogProduct,
   updateCatalogCategory,
 } from "./store/posCatalogStore.js";
@@ -1793,6 +1794,19 @@ app.post("/api/catalog/products", requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: e instanceof Error ? e.message : "Error al crear producto",
+    });
+  }
+});
+
+app.post("/api/catalog/categories", requireAuth, async (req, res) => {
+  try {
+    const out = await createCatalogCategory(req.body || {});
+    if (!out.ok) return catalogErrorResponse(res, out, "No se pudo crear la categoría.");
+    res.status(201).json({ success: true, data: out.row, parentId: out.parentId || null });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al crear categoría",
     });
   }
 });

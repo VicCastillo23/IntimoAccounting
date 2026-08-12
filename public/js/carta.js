@@ -251,14 +251,127 @@ async function saveProduct() {
   }
 }
 
+async function createCategoryFromName(rawName, { errEl, nameInput, selectAfter = true } = {}) {
+  const name = String(rawName || "").trim();
+  if (!name) {
+    if (errEl) {
+      errEl.textContent = "Escribe un nombre para la categoría.";
+      errEl.hidden = false;
+    }
+    return null;
+  }
+  const j = await apiFetch("/api/catalog/categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  const row = j.data;
+  await Promise.all([loadCategories(), loadStats()]);
+  if (selectAfter && row?.id) {
+    const form = $("#carta-form-category");
+    if (form) form.value = String(row.id);
+    const filter = $("#carta-category");
+    if (filter) filter.value = String(row.id);
+  }
+  if (nameInput) nameInput.value = "";
+  if (errEl) {
+    errEl.hidden = true;
+    errEl.textContent = "";
+  }
+  return row;
+}
+
+async function saveInlineCategory() {
+  const errEl = $("#carta-form-error");
+  const btn = $("#btn-carta-create-category");
+  if (btn) btn.disabled = true;
+  try {
+    const row = await createCategoryFromName($("#carta-new-category-name")?.value, {
+      errEl,
+      nameInput: $("#carta-new-category-name"),
+      selectAfter: true,
+    });
+    if (row) showAlert(`Categoría «${row.name}» creada.`, "success");
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = e instanceof Error ? e.message : "Error";
+      errEl.hidden = false;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function openCategoryModal() {
+  const backdrop = $("#modal-carta-category");
+  const err = $("#carta-category-error");
+  if (err) {
+    err.hidden = true;
+    err.textContent = "";
+  }
+  const input = $("#carta-category-name");
+  if (input) input.value = "";
+  if (!backdrop) return;
+  backdrop.hidden = false;
+  backdrop.setAttribute("aria-hidden", "false");
+  input?.focus();
+}
+
+function closeCategoryModal() {
+  const backdrop = $("#modal-carta-category");
+  if (!backdrop) return;
+  backdrop.hidden = true;
+  backdrop.setAttribute("aria-hidden", "true");
+}
+
+async function saveCategoryModal() {
+  const errEl = $("#carta-category-error");
+  const btn = $("#btn-carta-category-save");
+  if (btn) btn.disabled = true;
+  try {
+    const row = await createCategoryFromName($("#carta-category-name")?.value, {
+      errEl,
+      nameInput: $("#carta-category-name"),
+      selectAfter: true,
+    });
+    if (!row) return;
+    closeCategoryModal();
+    showAlert(`Categoría «${row.name}» creada. Ya puedes usarla en productos.`, "success");
+    await loadProducts();
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = e instanceof Error ? e.message : "Error";
+      errEl.hidden = false;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function boot() {
   const session = await initAuthShell();
   if (!session) return;
 
   $("#btn-carta-reload")?.addEventListener("click", () => {
-    void Promise.all([loadProducts(), loadStats()]);
+    void Promise.all([loadProducts(), loadStats(), loadCategories()]);
   });
   $("#btn-carta-add")?.addEventListener("click", openCreateForm);
+  $("#btn-carta-add-category")?.addEventListener("click", openCategoryModal);
+  $("#btn-carta-create-category")?.addEventListener("click", () => void saveInlineCategory());
+  $("#btn-carta-category-save")?.addEventListener("click", () => void saveCategoryModal());
+  $("#btn-carta-category-cancel")?.addEventListener("click", closeCategoryModal);
+  $("#carta-new-category-name")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveInlineCategory();
+    }
+  });
+  $("#carta-category-name")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveCategoryModal();
+    }
+  });
   $("#carta-q")?.addEventListener("input", () => {
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => void loadProducts(), 280);
@@ -269,6 +382,9 @@ async function boot() {
   $("#modal-carta")?.addEventListener("click", (e) => {
     if (e.target.id === "modal-carta") closeModal();
   });
+  $("#modal-carta-category")?.addEventListener("click", (e) => {
+    if (e.target.id === "modal-carta-category") closeCategoryModal();
+  });
   $("#carta-tbody")?.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-carta-edit]");
     if (!btn) return;
@@ -278,7 +394,12 @@ async function boot() {
     fillForm(row);
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && $("#modal-carta") && !$("#modal-carta").hidden) closeModal();
+    if (e.key !== "Escape") return;
+    if ($("#modal-carta-category") && !$("#modal-carta-category").hidden) {
+      closeCategoryModal();
+      return;
+    }
+    if ($("#modal-carta") && !$("#modal-carta").hidden) closeModal();
   });
 
   await loadCategories();

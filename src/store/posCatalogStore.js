@@ -396,6 +396,101 @@ export async function createCatalogProduct(body) {
 }
 
 /**
+ * Crea una categoría hoja con nombre libre (compatible con sync tablet: padre pN + hoja numérica).
+ * @param {Record<string, unknown>} body
+ */
+export async function createCatalogCategory(body) {
+  const pool = getPool();
+  if (!pool) return noDb();
+
+  const b = body && typeof body === "object" ? body : {};
+  const name = String(b.name ?? "").trim();
+  if (!name) return { ok: false, reason: "validation", message: "El nombre de la categoría es obligatorio." };
+  if (name.length > 120) {
+    return { ok: false, reason: "validation", message: "El nombre es demasiado largo (máx. 120)." };
+  }
+
+  const color = String(b.color || "#666666").trim() || "#666666";
+  let parentId = String(b.parentCategoryId ?? b.parentId ?? b.parent_id ?? "").trim();
+
+  try {
+    if (parentId) {
+      const parent = await pool.query(
+        `SELECT id, parent_id FROM pos.catalog_categories WHERE id = $1 LIMIT 1`,
+        [parentId]
+      );
+      if (!parent.rows.length) {
+        return { ok: false, reason: "validation", message: "La categoría padre no existe." };
+      }
+      if (parent.rows[0].parent_id != null) {
+        return { ok: false, reason: "validation", message: "Debes elegir una familia (categoría padre)." };
+      }
+    } else {
+      const maxParent = await pool.query(`
+        SELECT COALESCE(
+          MAX(
+            CASE
+              WHEN id ~ '^p[0-9]+$' THEN CAST(substring(id from 2) AS integer)
+              ELSE 0
+            END
+          ),
+          0
+        )::int AS n
+        FROM pos.catalog_categories
+        WHERE parent_id IS NULL
+      `);
+      const nextParentN = Number(maxParent.rows[0]?.n || 0) + 1;
+      parentId = `p${nextParentN}`;
+      const parentSort = await pool.query(
+        `SELECT COALESCE(MAX(sort_order), 0)::int + 1 AS s FROM pos.catalog_categories WHERE parent_id IS NULL`
+      );
+      await pool.query(
+        `INSERT INTO pos.catalog_categories (
+          id, name, description, color, icon, is_active, sort_order, parent_id
+        ) VALUES ($1,$2,NULL,$3,NULL,TRUE,$4,NULL)`,
+        [parentId, name, color, Number(parentSort.rows[0]?.s || nextParentN)]
+      );
+    }
+
+    const maxLeaf = await pool.query(`
+      SELECT COALESCE(
+        MAX(
+          CASE
+            WHEN id ~ '^[0-9]+$' THEN CAST(id AS integer)
+            ELSE 0
+          END
+        ),
+        0
+      )::int AS n
+      FROM pos.catalog_categories
+      WHERE parent_id IS NOT NULL
+    `);
+    const leafId = String(Number(maxLeaf.rows[0]?.n || 0) + 1);
+    const leafSort = await pool.query(
+      `SELECT COALESCE(MAX(sort_order), 0)::int + 1 AS s FROM pos.catalog_categories WHERE parent_id = $1`,
+      [parentId]
+    );
+
+    const { rows } = await pool.query(
+      `INSERT INTO pos.catalog_categories (
+        id, name, description, color, icon, is_active, sort_order, parent_id
+      ) VALUES ($1,$2,NULL,$3,NULL,TRUE,$4,$5)
+      RETURNING *`,
+      [leafId, name, color, Number(leafSort.rows[0]?.s || 1), parentId]
+    );
+
+    return { ok: true, row: mapCategoryRow(rows[0]), parentId };
+  } catch (e) {
+    if (isMissingTableError(e)) return missingTable("Falta migración de catálogo POS.");
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/duplicate key|unique/i.test(msg)) {
+      return { ok: false, reason: "validation", message: "Ya existe una categoría con ese identificador. Reintenta." };
+    }
+    throw e;
+  }
+}
+
+/**
  * @param {Record<string, unknown>} body
  */
 export async function updateCatalogCategory(id, body) {

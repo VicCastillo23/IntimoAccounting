@@ -3628,3 +3628,15 @@ td.report-nif-cf-indent {
   }
 }
 
+
+.carta-new-category__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.carta-new-category__row .field__input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
