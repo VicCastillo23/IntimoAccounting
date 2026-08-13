@@ -548,7 +548,6 @@ async function showDetail(id) {
     const d = await api(`/api/invoices/issued/${encodeURIComponent(id)}`);
     const suggestedDate = String(d.issued_at || "").slice(0, 10);
     const hasPoliza = Boolean(String(d.poliza_folio || "").trim());
-    const disabledAttr = hasPoliza ? "disabled" : "";
     let xmlPreview = "";
     if (d.xml_url) {
       try {
@@ -575,12 +574,14 @@ async function showDetail(id) {
         <label class="report-field">Fecha póliza ingreso
           <input id="fe-pay-date" class="report-field__input" type="date" value="${esc(suggestedDate)}" />
         </label>
-        <button id="fe-pay-auto" class="btn btn--primary" type="button" ${disabledAttr}>Crear póliza de ingreso</button>
+        <button id="fe-pay-auto" class="btn btn--primary" type="button" ${hasPoliza || !polizaAccountsReady ? "disabled" : ""}>Crear póliza de ingreso</button>
       </div>
       <p class="report-muted">${
         hasPoliza
           ? "Esta factura ya está ligada a una póliza; no se puede volver a generar otra desde aquí."
-          : "Puedes usar una fecha pasada; debe pertenecer al ejercicio fiscal activo."
+          : !polizaAccountsReady
+            ? "No se puede crear la póliza hasta que existan Banamex, Ventas al 16% e IVA Causado en el catálogo."
+            : "Puedes usar una fecha pasada; debe pertenecer al ejercicio fiscal activo."
       }</p>
       <p>
         ${d.xml_url ? `<a href="${esc(d.xml_url)}" target="_blank" rel="noopener">XML</a>` : "—"}
@@ -589,15 +590,53 @@ async function showDetail(id) {
       </p>
       ${xmlPreview}
     `;
-    if (!hasPoliza) {
-      document.getElementById("fe-pay-auto")?.addEventListener("click", () => void createSinglePoliza(id));
+    if (!hasPoliza && polizaAccountsReady) {
+      document.getElementById("fe-pay-auto")?.addEventListener("click", () => void createSinglePoliza(id).catch((e) => alert(e instanceof Error ? e.message : String(e))));
     }
   } catch (e) {
     box.innerHTML = `<p>No se pudo cargar detalle: ${esc(e.message)}</p>`;
   }
 }
 
+let polizaAccountsReady = false;
+
+async function refreshPolizaAccountsNote() {
+  const note = $("#fe-poliza-accounts-note");
+  const batchBtn = $("#fe-batch-btn");
+  try {
+    const data = await api("/api/invoices/issued/poliza-accounts");
+    polizaAccountsReady = Boolean(data.ready);
+    if (batchBtn) batchBtn.disabled = !polizaAccountsReady;
+    if (!note) return;
+    if (polizaAccountsReady) {
+      const a = data.accounts || {};
+      note.className = "alert";
+      note.hidden = false;
+      note.innerHTML = `Póliza de ingreso: <strong>${esc(a.bank?.name || "Banamex")}</strong> (debe total) · <strong>${esc(
+        a.sales?.name || "Ventas al 16%"
+      )}</strong> (haber subtotal) · <strong>${esc(a.iva?.name || "IVA Causado")}</strong> (haber IVA).`;
+      return;
+    }
+    note.className = "alert alert--error";
+    note.hidden = false;
+    const missing = Array.isArray(data.missing) ? data.missing : [];
+    note.textContent =
+      data.message ||
+      `No se puede crear la póliza hasta que existan en el catálogo: ${missing.join(", ") || "cuentas requeridas"}.`;
+  } catch (e) {
+    polizaAccountsReady = false;
+    if (batchBtn) batchBtn.disabled = true;
+    if (!note) return;
+    note.className = "alert alert--error";
+    note.hidden = false;
+    note.textContent = e instanceof Error ? e.message : "No se pudieron validar las cuentas de la póliza.";
+  }
+}
+
 async function createSinglePoliza(id) {
+  if (!polizaAccountsReady) {
+    throw new Error("Faltan cuentas contables para armar la póliza de ingreso. Revisa el aviso arriba.");
+  }
   const polizaDate = String(document.getElementById("fe-pay-date")?.value || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(polizaDate)) throw new Error("Selecciona una fecha válida.");
   const out = await apiPost("/api/invoices/issued/poliza-batch", {
@@ -611,6 +650,9 @@ async function createSinglePoliza(id) {
 }
 
 async function createBatchPoliza() {
+  if (!polizaAccountsReady) {
+    throw new Error("Faltan cuentas contables para armar la póliza de ingreso. Revisa el aviso arriba.");
+  }
   if (!selectedIssuedIds.size) throw new Error("Selecciona al menos una factura emitida.");
   const polizaDate = String($("#fe-batch-date")?.value || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(polizaDate)) throw new Error("Selecciona una fecha válida.");
@@ -620,6 +662,7 @@ async function createBatchPoliza() {
   });
   alert(`Póliza creada: ${out?.poliza?.folio || out?.poliza?.id || "OK"} · Facturas: ${Number(out?.linkedCount) || 0}`);
   selectedIssuedIds.clear();
+  updateBatchMeta();
 }
 
 async function importZipEmitidas() {
@@ -723,6 +766,7 @@ async function init() {
   if (d && !d.value) d.value = new Date().toISOString().slice(0, 10);
   updateBatchMeta();
   try {
+    await refreshPolizaAccountsNote();
     await loadIssued();
   } catch (e) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="10">No se pudo cargar: ${esc(e.message)}</td></tr>`;

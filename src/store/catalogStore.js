@@ -36,6 +36,139 @@ export async function listSatCodigoAgrupador(q) {
 }
 
 /**
+ * Busca una cuenta activa por patrones de descripción (prioridad: match más específico).
+ * @param {string[]} patterns
+ * @returns {Promise<{ ok: true, row: ChartRow | null } | { ok: false, reason: string }>}
+ */
+export async function findChartAccountByNamePatterns(patterns) {
+  const pool = getPool();
+  if (!pool) return noDb();
+  const list = (Array.isArray(patterns) ? patterns : [])
+    .map((p) => String(p || "").trim())
+    .filter(Boolean);
+  if (!list.length) return { ok: true, row: null };
+
+  try {
+    // Prefer exact (case-insensitive) then prefix/contains; shorter codes (leaf) first within score.
+    const { rows } = await pool.query(
+      `
+      WITH pats AS (
+        SELECT * FROM unnest($1::text[]) WITH ORDINALITY AS t(pat, ord)
+      )
+      SELECT c.id, c.num_cta, c.descripcion, c.sub_cta_de, c.nivel, c.natur,
+             c.sat_codigo_agrupador_id, c.activo,
+             sat.codigo AS codigo_agrupador,
+             sat.descripcion AS desc_agrupador,
+             p.ord AS pattern_ord,
+             CASE
+               WHEN lower(c.descripcion) = lower(p.pat) THEN 0
+               WHEN lower(c.descripcion) LIKE lower(p.pat) || '%' THEN 1
+               ELSE 2
+             END AS match_rank
+      FROM accounting.chart_accounts c
+      JOIN pats p ON lower(c.descripcion) LIKE '%' || lower(p.pat) || '%'
+      LEFT JOIN accounting.sat_codigo_agrupador sat ON sat.id = c.sat_codigo_agrupador_id
+      WHERE c.activo = true
+      ORDER BY match_rank ASC, p.ord ASC, length(c.num_cta) DESC, c.num_cta ASC
+      LIMIT 1
+      `,
+      [list]
+    );
+    return { ok: true, row: rows[0] || null };
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && e.code === "42P01") {
+      return { ok: false, reason: "missing_table", message: "Falta el catálogo de cuentas." };
+    }
+    throw e;
+  }
+}
+
+/**
+ * Resuelve las 3 cuentas de póliza de ingreso por factura emitida.
+ * Permite override por env POLIZA_ISSUED_*_ACCOUNT_CODE.
+ * @returns {Promise<{
+ *   ok: true,
+ *   bank: { code: string, name: string },
+ *   sales: { code: string, name: string },
+ *   iva: { code: string, name: string },
+ * } | {
+ *   ok: false,
+ *   reason: string,
+ *   message: string,
+ *   missing: string[],
+ *   accounts: Record<string, { code: string, name: string } | null>,
+ * }>}
+ */
+export async function resolveIssuedIncomePolizaAccounts() {
+  const pool = getPool();
+  if (!pool) return { ...noDb(), missing: ["Banamex", "Ventas al 16%", "IVA Causado"], accounts: {} };
+
+  const envBank = String(process.env.POLIZA_ISSUED_BANK_ACCOUNT_CODE || "").trim();
+  const envSales = String(process.env.POLIZA_ISSUED_SALES_ACCOUNT_CODE || "").trim();
+  const envIva = String(process.env.POLIZA_ISSUED_IVA_ACCOUNT_CODE || "").trim();
+
+  /** @param {string} code */
+  async function byCode(code) {
+    if (!code) return null;
+    const { rows } = await pool.query(
+      `SELECT num_cta, descripcion FROM accounting.chart_accounts WHERE activo = true AND num_cta = $1 LIMIT 1`,
+      [code]
+    );
+    if (!rows.length) return null;
+    return { code: String(rows[0].num_cta), name: String(rows[0].descripcion || code) };
+  }
+
+  const bank =
+    (await byCode(envBank)) ||
+    (await findChartAccountByNamePatterns(["Banamex cta", "Banamex"])).row;
+  const sales =
+    (await byCode(envSales)) ||
+    (await findChartAccountByNamePatterns(["Ventas al 16%"])).row;
+  const iva =
+    (await byCode(envIva)) ||
+    (await findChartAccountByNamePatterns(["IVA causado al 16%", "IVA Causado"])).row;
+
+  const mapRow = (r) =>
+    r
+      ? {
+          code: String(r.code || r.num_cta || "").trim(),
+          name: String(r.name || r.descripcion || "").trim(),
+        }
+      : null;
+
+  const accounts = {
+    bank: mapRow(bank),
+    sales: mapRow(sales),
+    iva: mapRow(iva),
+  };
+
+  /** @type {string[]} */
+  const missing = [];
+  if (!accounts.bank) missing.push("Banamex");
+  if (!accounts.sales) missing.push("Ventas al 16%");
+  if (!accounts.iva) missing.push("IVA Causado (o IVA causado al 16%)");
+
+  if (missing.length) {
+    return {
+      ok: false,
+      reason: "missing_accounts",
+      message:
+        `No se puede crear la póliza de ingreso: faltan cuentas en el catálogo (${missing.join(", ")}). ` +
+        `Créalas en Catálogo de cuentas y vuelve a intentar.`,
+      missing,
+      accounts,
+    };
+  }
+
+  return {
+    ok: true,
+    bank: accounts.bank,
+    sales: accounts.sales,
+    iva: accounts.iva,
+  };
+}
+
+/**
  * @param {string} [q]
  */
 export async function listChartAccounts(q) {

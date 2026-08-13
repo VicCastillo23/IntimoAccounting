@@ -25,6 +25,7 @@ import {
   listChartAccounts,
   createChartAccount,
   updateChartAccount,
+  resolveIssuedIncomePolizaAccounts,
 } from "./store/catalogStore.js";
 import { checkDb, ensureDatabaseExistsIfNeeded, getPool } from "./db/pool.js";
 import { ensureCatalogDevIfNeeded } from "./db/ensureCatalogDev.js";
@@ -1370,46 +1371,92 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
       });
     }
 
+    const accounts = await resolveIssuedIncomePolizaAccounts();
+    if (!accounts.ok) {
+      return res.status(409).json({
+        success: false,
+        code: "MISSING_ACCOUNTS",
+        message: accounts.message || "Faltan cuentas contables para armar la póliza de ingreso.",
+        missing: accounts.missing || [],
+        accounts: accounts.accounts || null,
+      });
+    }
+
     const lines = [];
     for (const r of rows) {
-      const amount = Number(r.total || 0);
+      const total = round2(Number(r.total || 0));
+      let subtotal = round2(Number(r.subtotal || 0));
+      let iva = round2(Number(r.taxes_transferred || 0));
+      if (!(subtotal > 0) && total > 0) {
+        subtotal = round2(total / 1.16);
+        iva = round2(total - subtotal);
+      } else if (Math.abs(round2(subtotal + iva) - total) > 0.05 && total > 0) {
+        // Si el CFDI no cuadra por redondeo/meta incompleta, reconstruye 16%.
+        subtotal = round2(total / 1.16);
+        iva = round2(total - subtotal);
+      }
+      if (iva < 0) iva = 0;
+      if (subtotal < 0) subtotal = 0;
+      // Ajuste final de centavos para que Debe = Haber.
+      const haber = round2(subtotal + iva);
+      if (haber !== total && total > 0) {
+        subtotal = round2(subtotal + (total - haber));
+      }
+
       const customer = String(r.customer_rfc || "CLIENTES DIVERSOS").trim() || "CLIENTES DIVERSOS";
       const ref = String(r.cfdi_uuid || `${r.series || ""}${r.folio || ""}` || r.public_id || "").trim();
-      lines.push({
+      const pdf = String(r.pdf_url || "").trim();
+      const xml = String(r.xml_url || "").trim();
+      const common = {
         ticketId: "",
-        accountCode: "102.01.001",
-        accountName: "Bancos",
-        debit: amount,
+        invoiceUrl: pdf,
+        invoiceXmlUrl: xml,
+        fxCurrency: "MX",
+        depto: "ADMINISTRACION",
+      };
+
+      lines.push({
+        ...common,
+        accountCode: accounts.bank.code,
+        accountName: accounts.bank.name,
+        debit: total,
         credit: 0,
         lineConcept: `Cobro factura emitida ${ref || customer}`.trim(),
-        invoiceUrl: String(r.pdf_url || "").trim(),
-        invoiceXmlUrl: String(r.xml_url || "").trim(),
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
       });
       lines.push({
-        ticketId: "",
-        accountCode: "401.01.001",
-        accountName: "Ingresos por ventas",
+        ...common,
+        accountCode: accounts.sales.code,
+        accountName: accounts.sales.name,
         debit: 0,
-        credit: amount,
-        lineConcept: `Ingreso por factura emitida ${ref || customer}`.trim(),
-        invoiceUrl: String(r.pdf_url || "").trim(),
-        invoiceXmlUrl: String(r.xml_url || "").trim(),
-        fxCurrency: "MX",
-        depto: "ADMINISTRACION",
+        credit: subtotal,
+        lineConcept: `Ventas 16% factura emitida ${ref || customer}`.trim(),
       });
+      if (iva > 0) {
+        lines.push({
+          ...common,
+          accountCode: accounts.iva.code,
+          accountName: accounts.iva.name,
+          debit: 0,
+          credit: iva,
+          lineConcept: `IVA causado factura emitida ${ref || customer}`.trim(),
+        });
+      }
     }
 
     const saved = await saveNewPoliza({
       type: "INGRESOS",
-      concept: `Cobro facturas emitidas (${rows.length})`,
+      concept: `Ingresos por facturas emitidas (${rows.length})`,
       polizaDate,
       lines: lines.map(normPolizaLine),
       sourceRef: {
         module: "invoicing-issued",
         mode: "automatic-batch",
         invoiceIds,
+        accounts: {
+          bank: accounts.bank.code,
+          sales: accounts.sales.code,
+          iva: accounts.iva.code,
+        },
       },
     });
     res.status(201).json({
@@ -1417,6 +1464,11 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
       data: {
         poliza: saved,
         linkedCount: rows.length,
+        accounts: {
+          bank: accounts.bank,
+          sales: accounts.sales,
+          iva: accounts.iva,
+        },
       },
     });
   } catch (e) {
@@ -1426,6 +1478,41 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
       success: false,
       code: errCode || undefined,
       message: e instanceof Error ? e.message : "Error al registrar póliza masiva de facturas emitidas",
+    });
+  }
+});
+
+app.get("/api/invoices/issued/poliza-accounts", requireAuth, async (_req, res) => {
+  try {
+    const accounts = await resolveIssuedIncomePolizaAccounts();
+    if (!accounts.ok) {
+      return res.json({
+        success: true,
+        data: {
+          ready: false,
+          message: accounts.message,
+          missing: accounts.missing || [],
+          accounts: accounts.accounts || null,
+        },
+      });
+    }
+    res.json({
+      success: true,
+      data: {
+        ready: true,
+        message: "Cuentas de póliza de ingreso listas.",
+        missing: [],
+        accounts: {
+          bank: accounts.bank,
+          sales: accounts.sales,
+          iva: accounts.iva,
+        },
+      },
+    });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al resolver cuentas de póliza",
     });
   }
 });
