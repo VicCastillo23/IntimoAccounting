@@ -1234,6 +1234,43 @@ app.post("/api/invoices/issued/delete", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/invoices/issued/poliza-accounts", requireAuth, async (_req, res) => {
+  try {
+    const accounts = await resolveIssuedIncomePolizaAccounts();
+    if (!accounts.ok) {
+      return res.json({
+        success: true,
+        data: {
+          ready: false,
+          message: accounts.message,
+          missing: accounts.missing || [],
+          accounts: accounts.accounts || null,
+        },
+      });
+    }
+    res.json({
+      success: true,
+      data: {
+        ready: true,
+        message: "Cuentas de póliza de ingreso listas.",
+        missing: [],
+        accounts: {
+          bank: accounts.bank,
+          sales16: accounts.sales16,
+          sales0: accounts.sales0,
+          sales: accounts.sales16,
+          iva: accounts.iva,
+        },
+      },
+    });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e instanceof Error ? e.message : "Error al resolver cuentas de póliza",
+    });
+  }
+});
+
 app.get("/api/invoices/issued/:id", requireAuth, async (req, res) => {
   try {
     const out = await getIssuedInvoiceDetailByPrefixedId(req.params.id);
@@ -1505,43 +1542,6 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
       success: false,
       code: errCode || undefined,
       message: e instanceof Error ? e.message : "Error al registrar póliza masiva de facturas emitidas",
-    });
-  }
-});
-
-app.get("/api/invoices/issued/poliza-accounts", requireAuth, async (_req, res) => {
-  try {
-    const accounts = await resolveIssuedIncomePolizaAccounts();
-    if (!accounts.ok) {
-      return res.json({
-        success: true,
-        data: {
-          ready: false,
-          message: accounts.message,
-          missing: accounts.missing || [],
-          accounts: accounts.accounts || null,
-        },
-      });
-    }
-    res.json({
-      success: true,
-      data: {
-        ready: true,
-        message: "Cuentas de póliza de ingreso listas.",
-        missing: [],
-        accounts: {
-          bank: accounts.bank,
-          sales16: accounts.sales16,
-          sales0: accounts.sales0,
-          sales: accounts.sales16,
-          iva: accounts.iva,
-        },
-      },
-    });
-  } catch (e) {
-    res.status(500).json({
-      success: false,
-      message: e instanceof Error ? e.message : "Error al resolver cuentas de póliza",
     });
   }
 });
