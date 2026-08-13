@@ -1383,24 +1383,38 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
     }
 
     const lines = [];
+    /** @type {string[]} */
+    const zeroRateMissing = [];
     for (const r of rows) {
       const total = round2(Number(r.total || 0));
+      // Conta: ignorar retenciones y descuentos por ahora.
       let subtotal = round2(Number(r.subtotal || 0));
       let iva = round2(Number(r.taxes_transferred || 0));
-      if (!(subtotal > 0) && total > 0) {
+      const looksZeroRate = iva <= 0.009 && total > 0 && (subtotal <= 0 || Math.abs(subtotal - total) <= 0.05);
+
+      if (looksZeroRate) {
+        subtotal = total > 0 ? total : Math.max(0, subtotal);
+        iva = 0;
+      } else if (!(subtotal > 0) && total > 0) {
         subtotal = round2(total / 1.16);
         iva = round2(total - subtotal);
       } else if (Math.abs(round2(subtotal + iva) - total) > 0.05 && total > 0) {
-        // Si el CFDI no cuadra por redondeo/meta incompleta, reconstruye 16%.
+        // CFDI incompleto / redondeo: asumir 16%.
         subtotal = round2(total / 1.16);
         iva = round2(total - subtotal);
       }
       if (iva < 0) iva = 0;
       if (subtotal < 0) subtotal = 0;
-      // Ajuste final de centavos para que Debe = Haber.
       const haber = round2(subtotal + iva);
       if (haber !== total && total > 0) {
         subtotal = round2(subtotal + (total - haber));
+      }
+
+      const isZeroRate = iva <= 0.009;
+      const salesAccount = isZeroRate ? accounts.sales0 : accounts.sales16;
+      if (isZeroRate && !salesAccount) {
+        zeroRateMissing.push(String(r.cfdi_uuid || r.id || "factura"));
+        continue;
       }
 
       const customer = String(r.customer_rfc || "CLIENTES DIVERSOS").trim() || "CLIENTES DIVERSOS";
@@ -1415,6 +1429,7 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
         depto: "ADMINISTRACION",
       };
 
+      // 3 líneas por factura (Banamex / Ventas / IVA). En tasa 0% el IVA va en $0.00.
       lines.push({
         ...common,
         accountCode: accounts.bank.code,
@@ -1425,22 +1440,31 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
       });
       lines.push({
         ...common,
-        accountCode: accounts.sales.code,
-        accountName: accounts.sales.name,
+        accountCode: salesAccount.code,
+        accountName: salesAccount.name,
         debit: 0,
         credit: subtotal,
-        lineConcept: `Ventas 16% factura emitida ${ref || customer}`.trim(),
+        lineConcept: `${isZeroRate ? "Ventas 0%" : "Ventas 16%"} factura emitida ${ref || customer}`.trim(),
       });
-      if (iva > 0) {
-        lines.push({
-          ...common,
-          accountCode: accounts.iva.code,
-          accountName: accounts.iva.name,
-          debit: 0,
-          credit: iva,
-          lineConcept: `IVA causado factura emitida ${ref || customer}`.trim(),
-        });
-      }
+      lines.push({
+        ...common,
+        accountCode: accounts.iva.code,
+        accountName: accounts.iva.name,
+        debit: 0,
+        credit: iva,
+        lineConcept: `IVA causado factura emitida ${ref || customer}`.trim(),
+      });
+    }
+
+    if (zeroRateMissing.length) {
+      return res.status(409).json({
+        success: false,
+        code: "MISSING_ACCOUNTS",
+        message:
+          `Hay factura(s) a tasa 0% y falta la cuenta "Ventas al 0%" en el catálogo ` +
+          `(${zeroRateMissing.slice(0, 3).join(", ")}${zeroRateMissing.length > 3 ? "…" : ""}).`,
+        missing: ["Ventas al 0%"],
+      });
     }
 
     const saved = await saveNewPoliza({
@@ -1454,7 +1478,8 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
         invoiceIds,
         accounts: {
           bank: accounts.bank.code,
-          sales: accounts.sales.code,
+          sales16: accounts.sales16.code,
+          sales0: accounts.sales0?.code || null,
           iva: accounts.iva.code,
         },
       },
@@ -1466,7 +1491,9 @@ app.post("/api/invoices/issued/poliza-batch", requireAuth, async (req, res) => {
         linkedCount: rows.length,
         accounts: {
           bank: accounts.bank,
-          sales: accounts.sales,
+          sales16: accounts.sales16,
+          sales0: accounts.sales0,
+          sales: accounts.sales16,
           iva: accounts.iva,
         },
       },
@@ -1504,7 +1531,9 @@ app.get("/api/invoices/issued/poliza-accounts", requireAuth, async (_req, res) =
         missing: [],
         accounts: {
           bank: accounts.bank,
-          sales: accounts.sales,
+          sales16: accounts.sales16,
+          sales0: accounts.sales0,
+          sales: accounts.sales16,
           iva: accounts.iva,
         },
       },

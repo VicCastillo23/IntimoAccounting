@@ -84,12 +84,15 @@ export async function findChartAccountByNamePatterns(patterns) {
 }
 
 /**
- * Resuelve las 3 cuentas de póliza de ingreso por factura emitida.
+ * Resuelve las cuentas de póliza de ingreso por factura emitida.
+ * Requiere Banamex, Ventas al 16%, IVA Causado. Ventas al 0% se resuelve si existe
+ * (tasa 0%; hoy poco frecuente en emitidas).
  * Permite override por env POLIZA_ISSUED_*_ACCOUNT_CODE.
  * @returns {Promise<{
  *   ok: true,
  *   bank: { code: string, name: string },
- *   sales: { code: string, name: string },
+ *   sales16: { code: string, name: string },
+ *   sales0: { code: string, name: string } | null,
  *   iva: { code: string, name: string },
  * } | {
  *   ok: false,
@@ -101,10 +104,17 @@ export async function findChartAccountByNamePatterns(patterns) {
  */
 export async function resolveIssuedIncomePolizaAccounts() {
   const pool = getPool();
-  if (!pool) return { ...noDb(), missing: ["Banamex", "Ventas al 16%", "IVA Causado"], accounts: {} };
+  if (!pool) {
+    return {
+      ...noDb(),
+      missing: ["Banamex", "Ventas al 16%", "IVA Causado"],
+      accounts: {},
+    };
+  }
 
   const envBank = String(process.env.POLIZA_ISSUED_BANK_ACCOUNT_CODE || "").trim();
-  const envSales = String(process.env.POLIZA_ISSUED_SALES_ACCOUNT_CODE || "").trim();
+  const envSales16 = String(process.env.POLIZA_ISSUED_SALES_ACCOUNT_CODE || "").trim();
+  const envSales0 = String(process.env.POLIZA_ISSUED_SALES_0_ACCOUNT_CODE || "").trim();
   const envIva = String(process.env.POLIZA_ISSUED_IVA_ACCOUNT_CODE || "").trim();
 
   /** @param {string} code */
@@ -121,9 +131,12 @@ export async function resolveIssuedIncomePolizaAccounts() {
   const bank =
     (await byCode(envBank)) ||
     (await findChartAccountByNamePatterns(["Banamex cta", "Banamex"])).row;
-  const sales =
-    (await byCode(envSales)) ||
+  const sales16 =
+    (await byCode(envSales16)) ||
     (await findChartAccountByNamePatterns(["Ventas al 16%"])).row;
+  const sales0 =
+    (await byCode(envSales0)) ||
+    (await findChartAccountByNamePatterns(["Ventas al 0%"])).row;
   const iva =
     (await byCode(envIva)) ||
     (await findChartAccountByNamePatterns(["IVA causado al 16%", "IVA Causado"])).row;
@@ -138,14 +151,17 @@ export async function resolveIssuedIncomePolizaAccounts() {
 
   const accounts = {
     bank: mapRow(bank),
-    sales: mapRow(sales),
+    sales16: mapRow(sales16),
+    sales0: mapRow(sales0),
+    // backward-compatible alias used by older UI copy
+    sales: mapRow(sales16),
     iva: mapRow(iva),
   };
 
   /** @type {string[]} */
   const missing = [];
   if (!accounts.bank) missing.push("Banamex");
-  if (!accounts.sales) missing.push("Ventas al 16%");
+  if (!accounts.sales16) missing.push("Ventas al 16%");
   if (!accounts.iva) missing.push("IVA Causado (o IVA causado al 16%)");
 
   if (missing.length) {
@@ -163,7 +179,9 @@ export async function resolveIssuedIncomePolizaAccounts() {
   return {
     ok: true,
     bank: accounts.bank,
-    sales: accounts.sales,
+    sales16: accounts.sales16,
+    sales0: accounts.sales0,
+    sales: accounts.sales16,
     iva: accounts.iva,
   };
 }

@@ -612,9 +612,11 @@ async function refreshPolizaAccountsNote() {
       const a = data.accounts || {};
       note.className = "alert";
       note.hidden = false;
-      note.innerHTML = `Póliza de ingreso: <strong>${esc(a.bank?.name || "Banamex")}</strong> (debe total) · <strong>${esc(
-        a.sales?.name || "Ventas al 16%"
-      )}</strong> (haber subtotal) · <strong>${esc(a.iva?.name || "IVA Causado")}</strong> (haber IVA).`;
+      note.innerHTML = `Póliza de ingreso (3 líneas/factura): <strong>${esc(a.bank?.name || "Banamex")}</strong> debe total · <strong>${esc(
+        a.sales16?.name || a.sales?.name || "Ventas al 16%"
+      )}</strong> / <strong>${esc(a.sales0?.name || "Ventas al 0%")}</strong> haber subtotal · <strong>${esc(
+        a.iva?.name || "IVA Causado"
+      )}</strong> haber IVA. Retenciones y descuentos se ignoran.`;
       return;
     }
     note.className = "alert alert--error";
